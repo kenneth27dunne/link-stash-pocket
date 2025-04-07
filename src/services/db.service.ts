@@ -28,26 +28,38 @@ class DatabaseService {
 
   constructor() {
     this.sqlite = new SQLiteConnection(CapacitorSQLite);
+    console.log('DatabaseService instance created');
   }
 
   async init(): Promise<void> {
     if (this.initialized) {
+      console.log('Database already initialized, skipping initialization');
       return;
     }
 
     try {
+      console.log('Starting database initialization...');
+      console.log('Current platform:', Capacitor.getPlatform());
+      
       // Initialize the web store for web platforms
       if (Capacitor.getPlatform() === 'web') {
+        console.log('Initializing web store for SQLite...');
         await this.sqlite.initWebStore();
+        console.log('Web store initialized successfully');
       }
 
       // Create connection
+      console.log('Creating database connection...');
       this.db = await this.sqlite.createConnection('linkstash_db', false, 'no-encryption', 1, false);
+      console.log('Database connection created');
       
       // Open the connection
+      console.log('Opening database connection...');
       await this.db.open();
+      console.log('Database connection opened');
 
       // Create tables
+      console.log('Creating tables if not exist...');
       const queryCategories = `
         CREATE TABLE IF NOT EXISTS categories (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,24 +85,34 @@ class DatabaseService {
       `;
 
       await this.db.execute(queryCategories);
+      console.log('Categories table created/verified');
+      
       await this.db.execute(queryLinks);
+      console.log('Links table created/verified');
 
       // Check if default categories exist
+      console.log('Checking for default categories...');
       const result = await this.db.query("SELECT COUNT(*) as count FROM categories");
       
       if (result.values && result.values[0].count === 0) {
+        console.log('No categories found, adding default categories...');
         // Insert default categories
         await this.db.run(`
           INSERT INTO categories (name, icon) VALUES 
           ('Videos', 'video'),
           ('Images', 'image')
         `, []);
+        console.log('Default categories added');
+      } else {
+        console.log('Default categories already exist');
       }
 
       this.initialized = true;
-      console.log('Database initialized successfully');
+      console.log('Database initialization completed successfully');
     } catch (error) {
       console.error('Error initializing database:', error);
+      // Mark as not initialized to allow retry
+      this.initialized = false;
       throw error;
     }
   }

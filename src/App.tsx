@@ -10,11 +10,29 @@ import Index from "./pages/Index";
 import CategoryView from "./pages/CategoryView";
 import NotFound from "./pages/NotFound";
 import InitialSetup from "./components/InitialSetup";
+import { toast } from "@/hooks/use-toast";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Add a timeout to prevent infinite loading
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (isInitializing) {
+        console.log('Initialization timeout reached, proceeding to app');
+        setIsInitializing(false);
+        toast({
+          title: "Warning",
+          description: "Database initialization took longer than expected. Some features might not work correctly.",
+          variant: "destructive",
+        });
+      }
+    }, 10000); // 10 seconds timeout
+    
+    return () => clearTimeout(timeoutId);
+  }, [isInitializing]);
   
   useEffect(() => {
     // Add event listener to prevent pull-to-refresh on mobile
