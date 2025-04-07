@@ -1,4 +1,3 @@
-
 import { Capacitor } from '@capacitor/core';
 import { SQLiteConnection, SQLiteDBConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
 
@@ -25,6 +24,7 @@ class DatabaseService {
   private sqlite: SQLiteConnection;
   private db!: SQLiteDBConnection;
   private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {
     this.sqlite = new SQLiteConnection(CapacitorSQLite);
@@ -37,28 +37,56 @@ class DatabaseService {
       return;
     }
 
+    if (this.initializationPromise) {
+      console.log('Initialization already in progress, returning existing promise');
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this._init();
+    
+    try {
+      await this.initializationPromise;
+    } catch (error) {
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
+
+  private async _init(): Promise<void> {
     try {
       console.log('Starting database initialization...');
-      console.log('Current platform:', Capacitor.getPlatform());
+      const platform = Capacitor.getPlatform();
+      console.log('Current platform:', platform);
       
-      // Initialize the web store for web platforms
-      if (Capacitor.getPlatform() === 'web') {
+      if (platform === 'web') {
         console.log('Initializing web store for SQLite...');
-        await this.sqlite.initWebStore();
-        console.log('Web store initialized successfully');
+        try {
+          await this.sqlite.initWebStore();
+          console.log('Web store initialized successfully');
+        } catch (error) {
+          console.error('Error initializing web store:', error);
+          throw new Error('Failed to initialize web store: ' + (error instanceof Error ? error.message : String(error)));
+        }
       }
 
-      // Create connection
       console.log('Creating database connection...');
-      this.db = await this.sqlite.createConnection('linkstash_db', false, 'no-encryption', 1, false);
-      console.log('Database connection created');
+      try {
+        this.db = await this.sqlite.createConnection('linkstash_db', false, 'no-encryption', 1, false);
+        console.log('Database connection created');
+      } catch (error) {
+        console.error('Error creating database connection:', error);
+        throw new Error('Failed to create connection: ' + (error instanceof Error ? error.message : String(error)));
+      }
       
-      // Open the connection
       console.log('Opening database connection...');
-      await this.db.open();
-      console.log('Database connection opened');
+      try {
+        await this.db.open();
+        console.log('Database connection opened');
+      } catch (error) {
+        console.error('Error opening database connection:', error);
+        throw new Error('Failed to open connection: ' + (error instanceof Error ? error.message : String(error)));
+      }
 
-      // Create tables
       console.log('Creating tables if not exist...');
       const queryCategories = `
         CREATE TABLE IF NOT EXISTS categories (
@@ -84,35 +112,43 @@ class DatabaseService {
         );
       `;
 
-      await this.db.execute(queryCategories);
-      console.log('Categories table created/verified');
-      
-      await this.db.execute(queryLinks);
-      console.log('Links table created/verified');
+      try {
+        await this.db.execute(queryCategories);
+        console.log('Categories table created/verified');
+        
+        await this.db.execute(queryLinks);
+        console.log('Links table created/verified');
+      } catch (error) {
+        console.error('Error creating tables:', error);
+        throw new Error('Failed to create tables: ' + (error instanceof Error ? error.message : String(error)));
+      }
 
-      // Check if default categories exist
       console.log('Checking for default categories...');
-      const result = await this.db.query("SELECT COUNT(*) as count FROM categories");
-      
-      if (result.values && result.values[0].count === 0) {
-        console.log('No categories found, adding default categories...');
-        // Insert default categories
-        await this.db.run(`
-          INSERT INTO categories (name, icon) VALUES 
-          ('Videos', 'video'),
-          ('Images', 'image')
-        `, []);
-        console.log('Default categories added');
-      } else {
-        console.log('Default categories already exist');
+      try {
+        const result = await this.db.query("SELECT COUNT(*) as count FROM categories");
+        
+        if (result.values && result.values[0].count === 0) {
+          console.log('No categories found, adding default categories...');
+          await this.db.run(`
+            INSERT INTO categories (name, icon) VALUES 
+            ('Videos', 'video'),
+            ('Images', 'image')
+          `, []);
+          console.log('Default categories added');
+        } else {
+          console.log('Default categories already exist');
+        }
+      } catch (error) {
+        console.error('Error checking default categories:', error);
+        throw new Error('Failed to check/add default categories: ' + (error instanceof Error ? error.message : String(error)));
       }
 
       this.initialized = true;
       console.log('Database initialization completed successfully');
     } catch (error) {
       console.error('Error initializing database:', error);
-      // Mark as not initialized to allow retry
       this.initialized = false;
+      this.initializationPromise = null;
       throw error;
     }
   }
@@ -210,5 +246,4 @@ class DatabaseService {
   }
 }
 
-// Singleton instance
 export const dbService = new DatabaseService();

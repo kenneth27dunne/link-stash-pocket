@@ -17,11 +17,11 @@ const queryClient = new QueryClient();
 const App = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   
-  // Add a timeout to prevent infinite loading
+  // Add a timeout to prevent infinite loading (as a failsafe)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (isInitializing) {
-        console.log('Initialization timeout reached, proceeding to app');
+        console.log('Initialization timeout reached in App.tsx, proceeding to app');
         setIsInitializing(false);
         toast({
           title: "Warning",
@@ -29,7 +29,7 @@ const App = () => {
           variant: "destructive",
         });
       }
-    }, 10000); // 10 seconds timeout
+    }, 20000); // 20 seconds timeout (longer than the one in InitialSetup)
     
     return () => clearTimeout(timeoutId);
   }, [isInitializing]);
