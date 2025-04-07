@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^7.0.0",
     "@capacitor/android": "^5.6.0",
     "@capacitor/cli": "^5.6.0",
     "@capacitor/share": "^5.0.7",

@@ -23,7 +23,11 @@ const config: CapacitorConfig = {
         biometricAuth: false,
         biometricTitle: "Biometric login for LinkStash",
         biometricSubTitle: "Log in using your biometric"
-      }
+      },
+      electronIsEncryption: false,
+      electronWindowsLocation: "C:\\ProgramData\\CapacitorDatabase",
+      electronMacLocation: "/Volumes/Development_Lacie/Development/Databases",
+      electronLinuxLocation: "Databases"
     }
   }
 };
