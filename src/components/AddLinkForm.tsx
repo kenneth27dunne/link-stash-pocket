@@ -142,15 +142,17 @@ const AddLinkForm: React.FC<AddLinkFormProps> = ({ initialUrl = '', onClose }) =
         ) : (
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={open}
-                className="w-full justify-between bg-white/10 text-white border-white/20 hover:bg-white/20"
-              >
-                {selectedCategoryName || "Select a category"}
-                <span className="ml-2 opacity-50">⌄</span>
-              </Button>
+              <div className="bg-white/10 text-white border border-white/20 rounded-md">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="w-full justify-between bg-transparent text-white border-0 hover:bg-white/10 h-10"
+                >
+                  {selectedCategoryName || "Select a category"}
+                  <span className="ml-2 opacity-50">⌄</span>
+                </Button>
+              </div>
             </PopoverTrigger>
             <PopoverContent className="w-full p-0 bg-[#1e1e1e] border-white/20">
               <Command className="bg-transparent">
