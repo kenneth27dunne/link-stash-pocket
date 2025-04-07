@@ -183,7 +183,7 @@ class DatabaseService {
 
   async closeConnection(): Promise<void> {
     if (this.db) {
-      await this.sqlite.closeConnection('linkstash_db');
+      await this.sqlite.closeConnection('linkstash_db', false);
     }
   }
 }
