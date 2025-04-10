@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
@@ -11,7 +10,7 @@ import AddLinkForm from '@/components/AddLinkForm';
 const CategoryView = () => {
   const { id } = useParams<{ id: string }>();
   const categoryId = parseInt(id || '0', 10);
-  const { categories, getLinksForCategory, deleteCategory, selectedCategory, setSelectedCategory } = useAppContext();
+  const { categories, getLinksForCategory, deleteCategory, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const navigate = useNavigate();
@@ -39,6 +38,26 @@ const CategoryView = () => {
     }
   };
 
+  const handleOpenAddLink = () => {
+    setAddLinkOpen(true);
+    openModal();
+  };
+
+  const handleCloseAddLink = () => {
+    setAddLinkOpen(false);
+    closeModal();
+  };
+
+  const handleOpenDeleteDialog = () => {
+    setDeleteDialogOpen(true);
+    openModal();
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    closeModal();
+  };
+
   if (!category) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -48,37 +67,39 @@ const CategoryView = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-6">
-      <header className="mb-6 flex justify-between items-center">
-        <div className="flex items-center">
+    <div className="flex flex-col h-screen bg-gradient-main">
+      <header className="flex-none p-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mr-2 bg-white/10 text-white rounded-full h-10 w-10"
+              onClick={handleBack}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-white text-2xl font-bold">{category.name}</h1>
+          </div>
           <Button
             variant="ghost"
             size="icon"
-            className="mr-2 bg-white/10 text-white rounded-full h-10 w-10"
-            onClick={handleBack}
+            className="bg-white/10 text-white/80 hover:text-red-400 rounded-full h-10 w-10"
+            onClick={handleOpenDeleteDialog}
           >
-            <ArrowLeft className="h-5 w-5" />
+            <Trash2 className="h-5 w-5" />
           </Button>
-          <h1 className="text-white text-2xl font-bold">{category.name}</h1>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="bg-white/10 text-white/80 hover:text-red-400 rounded-full h-10 w-10"
-          onClick={() => setDeleteDialogOpen(true)}
-        >
-          <Trash2 className="h-5 w-5" />
-        </Button>
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 overflow-y-auto p-6">
         {links.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-white/70">
             <p className="mb-4">No links saved in this category yet</p>
             <Button
               variant="outline"
               className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-              onClick={() => setAddLinkOpen(true)}
+              onClick={handleOpenAddLink}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first link
@@ -93,41 +114,41 @@ const CategoryView = () => {
         )}
       </main>
 
-      <footer className="mt-8">
+      <footer className="flex-none p-6">
         <Button 
           className="w-full bg-linkstash-orange hover:bg-linkstash-orange/80 text-white text-xl font-medium py-6 rounded-xl"
-          onClick={() => setAddLinkOpen(true)}
+          onClick={handleOpenAddLink}
         >
           Save
         </Button>
       </footer>
 
       {/* Add Link Dialog */}
-      <Dialog open={addLinkOpen} onOpenChange={setAddLinkOpen}>
+      <Dialog open={addLinkOpen} onOpenChange={handleCloseAddLink}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
-          <AddLinkForm onClose={() => setAddLinkOpen(false)} />
+          <AddLinkForm onClose={handleCloseAddLink} />
         </DialogContent>
       </Dialog>
 
       {/* Delete Category Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog open={deleteDialogOpen} onOpenChange={handleCloseDeleteDialog}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Delete Category</DialogTitle>
+            <DialogTitle className="text-white text-xl">Delete Category</DialogTitle>
             <DialogDescription className="text-white/70">
-              Are you sure you want to delete "{category.name}"? This will permanently remove all links in this category.
+              Are you sure you want to delete this category? All links in this category will also be deleted.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-2 mt-4">
             <Button
               variant="outline"
               className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={handleCloseDeleteDialog}
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              className="bg-red-500 hover:bg-red-600 text-white"
               onClick={handleDeleteCategory}
             >
               Delete

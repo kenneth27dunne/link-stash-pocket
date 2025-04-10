@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { dbService, Category, Link } from '../services/db.service';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +14,9 @@ interface AppContextType {
   getLinksForCategory: (categoryId: number) => Link[];
   selectedCategory: Category | null;
   setSelectedCategory: (category: Category | null) => void;
+  isModalOpen: boolean;
+  openModal: () => void;
+  closeModal: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -24,18 +26,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [links, setLinks] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
+
+  const openModal = () => {
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
 
   const refreshData = async () => {
     try {
       setLoading(true);
+      console.log('AppContext: Refreshing data');
       const fetchedCategories = await dbService.getCategories();
+      console.log('AppContext: Categories fetched:', fetchedCategories);
       const fetchedLinks = await dbService.getAllLinks();
+      console.log('AppContext: Links fetched:', fetchedLinks);
       
       setCategories(fetchedCategories);
       setLinks(fetchedLinks);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('AppContext: Error refreshing data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load data',
@@ -140,21 +154,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
-    const initializeDatabase = async () => {
+    const initializeData = async () => {
       try {
-        await dbService.init();
+        console.log('AppContext: Starting data refresh');
         await refreshData();
       } catch (error) {
-        console.error('Error initializing database:', error);
+        console.error('AppContext: Error refreshing data:', error);
         toast({
           title: 'Database Error',
-          description: 'Failed to initialize database',
+          description: 'Failed to load data',
           variant: 'destructive',
         });
       }
     };
 
-    initializeDatabase();
+    initializeData();
 
     return () => {
       dbService.closeConnection().catch(err => {
@@ -177,6 +191,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getLinksForCategory,
         selectedCategory,
         setSelectedCategory,
+        isModalOpen,
+        openModal,
+        closeModal,
       }}
     >
       {children}

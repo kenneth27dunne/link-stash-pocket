@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LinkStash</string>
+    <string name="title_activity_main">LinkStash Pocket</string>
+    <string name="package_name">app.dunnewebsolutions.linkstash</string>
+    <string name="custom_url_scheme">linkstash</string>
+</resources>

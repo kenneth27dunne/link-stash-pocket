@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ interface AddCategoryFormProps {
 const AddCategoryForm: React.FC<AddCategoryFormProps> = ({ onClose }) => {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('link');
-  const { addCategory } = useAppContext();
+  const { addCategory, closeModal } = useAppContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +27,7 @@ const AddCategoryForm: React.FC<AddCategoryFormProps> = ({ onClose }) => {
     });
 
     if (success) {
+      closeModal();
       onClose();
     }
   };
