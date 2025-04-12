@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,10 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Check, PlusCircle, Loader2 } from 'lucide-react';
 import { shareService } from '../services/share.service';
 import { linkMetadataService } from '../services/linkMetadata.service';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 import LinkThumbnail from './LinkThumbnail';
+import { Label } from "@/components/ui/label";
 
 interface AddLinkFormProps {
   initialUrl?: string;
@@ -33,6 +34,8 @@ const AddLinkForm: React.FC<AddLinkFormProps> = ({ initialUrl = '', onClose, onS
   const [searchValue, setSearchValue] = useState('');
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCategoryName = categories.find(category => category.id?.toString() === categoryId)?.name || '';
 
@@ -64,8 +67,12 @@ const AddLinkForm: React.FC<AddLinkFormProps> = ({ initialUrl = '', onClose, onS
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setShowValidation(true);
     
     if (!url.trim() || !categoryId) {
+      if (!url.trim()) {
+        urlInputRef.current?.focus();
+      }
       return;
     }
 
@@ -117,17 +124,21 @@ const AddLinkForm: React.FC<AddLinkFormProps> = ({ initialUrl = '', onClose, onS
         <h2 className="text-xl font-bold text-white">Save Link</h2>
         
         <div className="space-y-2">
-          <label htmlFor="url" className="text-sm font-medium text-white">
-            URL *
-          </label>
+          <Label htmlFor="url" className="text-white">URL</Label>
           <Input
+            ref={urlInputRef}
             id="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com"
-            className="bg-white/10 text-white border-white/20 placeholder:text-white/50"
-            required
+            className={cn(
+              "bg-white/10 border-white/20 text-white placeholder:text-white/50",
+              showValidation && !url.trim() && "border-red-500 focus-visible:ring-red-500"
+            )}
+            placeholder="Enter URL"
           />
+          {showValidation && !url.trim() && (
+            <p className="text-sm text-red-500">URL is required</p>
+          )}
         </div>
 
         {/* Thumbnail Preview */}
@@ -182,97 +193,80 @@ const AddLinkForm: React.FC<AddLinkFormProps> = ({ initialUrl = '', onClose, onS
         </div>
         
         <div className="space-y-2">
-          <label htmlFor="category" className="text-sm font-medium text-white">
-            Category *
-          </label>
-          {isAddingNewCategory ? (
-            <div className="flex space-x-2">
-              <Input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="New category name"
-                className="bg-white/10 text-white border-white/20 placeholder:text-white/50"
-                autoFocus
-              />
-              <Button type="button" onClick={handleAddCategory} className="bg-linkstash-orange text-white hover:bg-linkstash-orange/80">
-                Add
+          <Label htmlFor="category" className="text-white">Category</Label>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="w-full justify-between bg-white/10 text-white border-white/20 hover:bg-white/20"
+              >
+                {selectedCategoryName || "Select a category"}
+                <span className="ml-2 opacity-50">⌄</span>
               </Button>
-              <Button type="button" onClick={() => setIsAddingNewCategory(false)} variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <div className="bg-white/10 text-white border border-white/20 rounded-md">
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between bg-transparent text-white border-0 hover:bg-white/10 h-10"
-                  >
-                    {selectedCategoryName || "Select a category"}
-                    <span className="ml-2 opacity-50">⌄</span>
-                  </Button>
-                </div>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0 bg-[#1e1e1e] border-white/20">
-                <Command className="bg-transparent">
-                  <CommandInput 
-                    placeholder="Search category..."
-                    value={searchValue}
-                    onValueChange={setSearchValue}
-                    className="h-9 text-white"
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      <div className="py-3 px-4 text-sm text-white">
-                        {searchValue.trim() !== '' ? (
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              setNewCategoryName(searchValue);
-                              setIsAddingNewCategory(true);
-                              setOpen(false);
-                            }}
-                            variant="ghost"
-                            className="w-full justify-start text-left text-sm"
-                          >
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Create "{searchValue}"
-                          </Button>
-                        ) : (
-                          "No category found"
-                        )}
-                      </div>
-                    </CommandEmpty>
-                    <CommandGroup className="overflow-hidden">
-                      {filteredCategories.map((category) => (
-                        <CommandItem
-                          key={category.id}
-                          value={category.name}
-                          onSelect={() => {
-                            setCategoryId(category.id?.toString() || '');
-                            setOpen(false);
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-[#1C0C23] border-white/20">
+              <Command className="bg-transparent">
+                <CommandInput 
+                  placeholder="Search categories..." 
+                  value={searchValue}
+                  onValueChange={setSearchValue}
+                  className="border-none bg-transparent text-white placeholder:text-white/50"
+                />
+                <CommandEmpty className="py-2 px-2">
+                  {searchValue.trim() ? (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const newName = searchValue.trim();
+                        addCategory({
+                          name: newName,
+                          icon: 'link'
+                        }).then(newId => {
+                          if (newId) {
+                            setCategoryId(newId.toString());
                             setSearchValue('');
-                          }}
-                          className={cn(
-                            "flex items-center px-4 py-2 text-sm text-white hover:bg-white/10",
-                            categoryId === category.id?.toString() ? "bg-white/10" : ""
-                          )}
-                        >
-                          {category.name}
-                          {categoryId === category.id?.toString() && (
-                            <Check className="ml-auto h-4 w-4" />
-                          )}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
+                            setOpen(false);
+                          }
+                        });
+                      }}
+                      variant="ghost"
+                      className="w-full justify-start text-white hover:bg-white/10"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Create "{searchValue.trim()}"
+                    </Button>
+                  ) : (
+                    <p className="text-center text-sm text-white/50">No categories found.</p>
+                  )}
+                </CommandEmpty>
+                <CommandGroup className="max-h-[200px] overflow-auto">
+                  {categories.map((category) => (
+                    <CommandItem
+                      key={category.id}
+                      value={category.name}
+                      onSelect={() => {
+                        setCategoryId(category.id?.toString() || '');
+                        setSearchValue('');
+                        setOpen(false);
+                      }}
+                      className="flex items-center px-2 py-2 text-white hover:bg-white/10 cursor-pointer"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          categoryId === category.id?.toString() ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {category.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         
         <div className="flex space-x-2 pt-2 sticky bottom-0 pb-2">

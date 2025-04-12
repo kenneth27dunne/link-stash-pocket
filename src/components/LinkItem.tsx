@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from '../services/db.service';
+import { Link } from 'react-router-dom';
 import { Video, Image, File, Link as LinkIcon, Trash2, ExternalLink } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { shareService } from '../services/share.service';
 import { Capacitor } from '@capacitor/core';
 import LinkThumbnail from './LinkThumbnail';
+import { Link as LinkType } from '../services/db.service';
 
 interface LinkItemProps {
-  link: Link;
+  link: LinkType;
+  onDelete: (id: number) => void;
 }
 
 const LinkItem: React.FC<LinkItemProps> = ({ link }) => {
@@ -54,60 +56,49 @@ const LinkItem: React.FC<LinkItemProps> = ({ link }) => {
     : '';
 
   return (
-    <div 
-      className="bg-linkstash-purple/60 backdrop-blur-sm rounded-lg overflow-hidden shadow-md cursor-pointer animate-fade-in"
-      onClick={handleOpen}
-    >
-      <div className="flex flex-col">
-        <div className="w-full">
-          <LinkThumbnail 
-            title={link.title || link.url} 
-            thumbnail={link.thumbnail}
-            favicon={link.favicon}
-            className="rounded-none"
-          />
-        </div>
-        <div className="p-3">
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 bg-linkstash-purple/80 rounded-md p-2">
-              {getIcon()}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <h3 className="text-white font-medium truncate">
-                {link.title || link.url}
-              </h3>
+    <div className="group relative bg-white/5 hover:bg-white/10 rounded-lg overflow-hidden transition-colors">
+      <Link to={link.url} target="_blank" rel="noopener noreferrer" className="block p-4">
+        <div className="flex flex-col h-full">
+          <div className="flex items-start gap-3">
+            {link.favicon && (
+              <img
+                src={link.favicon}
+                alt=""
+                className="w-4 h-4 mt-1 flex-shrink-0"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-white font-medium truncate">{link.title || link.url}</h3>
               {link.description && (
-                <p className="text-white/70 text-sm line-clamp-2 mt-1">
-                  {link.description}
-                </p>
+                <p className="text-white/70 text-sm line-clamp-2 mt-1">{link.description}</p>
               )}
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-white/50 text-xs">
-                  {formattedDate}
-                </p>
-                <div className="flex space-x-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-white/80 hover:text-white hover:bg-linkstash-purple/80"
-                    onClick={handleShare}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-white/80 hover:text-red-400 hover:bg-linkstash-purple/80"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
             </div>
           </div>
+          {link.thumbnail && (
+            <div className="mt-3 aspect-video rounded overflow-hidden">
+              <img
+                src={link.thumbnail}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
         </div>
-      </div>
+      </Link>
+      <button
+        onClick={handleDelete}
+        className="absolute top-2 right-2 p-1 bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 };

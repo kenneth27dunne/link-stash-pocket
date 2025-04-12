@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { dbService, Category, Link } from '../services/db.service';
 import { useToast } from '@/hooks/use-toast';
+import { syncService } from '../services/sync.service';
 
 interface AppContextType {
   categories: Category[];
@@ -8,6 +9,7 @@ interface AppContextType {
   loading: boolean;
   refreshData: () => Promise<void>;
   addCategory: (category: Category) => Promise<number>;
+  updateCategory: (category: Category) => Promise<boolean>;
   addLink: (link: Link) => Promise<number>;
   deleteLink: (id: number) => Promise<boolean>;
   deleteCategory: (id: number) => Promise<boolean>;
@@ -79,6 +81,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         variant: 'destructive',
       });
       return 0;
+    }
+  };
+
+  const updateCategory = async (category: Category): Promise<boolean> => {
+    try {
+      const success = await dbService.updateCategory(category);
+      if (success) {
+        await refreshData();
+        toast({
+          title: 'Category Updated',
+          description: `"${category.name}" has been updated successfully`,
+        });
+        return true;
+      }
+      toast({
+        title: 'Error',
+        description: 'Failed to update category',
+        variant: 'destructive',
+      });
+      return false;
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update category',
+        variant: 'destructive',
+      });
+      return false;
     }
   };
 
@@ -158,6 +188,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         console.log('AppContext: Starting data refresh');
         await refreshData();
+        
+        // Initialize sync service and perform initial sync if enabled
+        await syncService.init();
+        if (syncService.isCloudSyncEnabled()) {
+          console.log('AppContext: Performing initial sync');
+          await syncService.performBackgroundSync();
+        }
       } catch (error) {
         console.error('AppContext: Error refreshing data:', error);
         toast({
@@ -185,6 +222,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         loading,
         refreshData,
         addCategory,
+        updateCategory,
         addLink,
         deleteLink,
         deleteCategory,

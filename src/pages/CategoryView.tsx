@@ -10,7 +10,7 @@ import AddLinkForm from '@/components/AddLinkForm';
 const CategoryView = () => {
   const { id } = useParams<{ id: string }>();
   const categoryId = parseInt(id || '0', 10);
-  const { categories, getLinksForCategory, deleteCategory, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
+  const { categories, getLinksForCategory, deleteCategory, deleteLink, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const navigate = useNavigate();
@@ -67,7 +67,7 @@ const CategoryView = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-main">
+    <div className="flex flex-col h-screen w-full max-w-5xl mx-auto">
       <header className="flex-none p-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center">
@@ -106,9 +106,9 @@ const CategoryView = () => {
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
             {links.map((link) => (
-              <LinkItem key={link.id} link={link} />
+              <LinkItem key={link.id} link={link} onDelete={deleteLink} />
             ))}
           </div>
         )}

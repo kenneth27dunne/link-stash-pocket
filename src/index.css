@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -108,4 +107,56 @@ html, body, #root {
 #root {
   display: flex;
   flex-direction: column;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* Custom input styling */
+.bg-white\/10 {
+  --tw-bg-opacity: 0.1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity));
+}
+
+input:focus-visible,
+textarea:focus-visible,
+[role="combobox"]:focus-visible {
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-opacity: 0.2 !important;
+}
+
+input.border-red-500,
+textarea.border-red-500,
+[role="combobox"].border-red-500 {
+  --tw-border-opacity: 0.6 !important;
+}
+
+input.focus-visible\:ring-red-500:focus-visible,
+textarea.focus-visible\:ring-red-500:focus-visible,
+[role="combobox"].focus-visible\:ring-red-500:focus-visible {
+  --tw-ring-opacity: 0.2 !important;
+  --tw-ring-color: rgb(239 68 68 / var(--tw-ring-opacity)) !important;
 }

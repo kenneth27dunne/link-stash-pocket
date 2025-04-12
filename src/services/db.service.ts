@@ -6,6 +6,7 @@ export interface Category {
   name: string;
   icon: string;
   color?: string;
+  description?: string;
   createdAt?: string;
 }
 
@@ -21,8 +22,40 @@ export interface Link {
   createdAt?: string;
 }
 
-// Web fallback storage using localStorage
-class WebStorageFallback {
+interface StorageInterface {
+  initialize(): Promise<void>;
+  init(): Promise<void>;
+  getCategories(): Promise<Category[]>;
+  addCategory(category: Omit<Category, 'id'>): Promise<number>;
+  getLinksByCategory(categoryId: number): Promise<Link[]>;
+  getAllLinks(): Promise<Link[]>;
+  addLink(link: Omit<Link, 'id'>): Promise<number>;
+  deleteLink(id: number): Promise<boolean>;
+  deleteCategory(id: number): Promise<boolean>;
+  updateCategory(category: Category): Promise<boolean>;
+  updateLink(link: Link): Promise<boolean>;
+}
+
+class WebStorageFallback implements StorageInterface {
+  private initialized = false;
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+  }
+
+  async init(): Promise<void> {
+    await this.initialize();
+  }
+
+  get isWebFallback(): boolean {
+    return true;
+  }
+
+  get db(): any {
+    return this;
+  }
+
   private getItem(key: string): any {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : null;
@@ -36,10 +69,10 @@ class WebStorageFallback {
     return this.getItem('categories') || [];
   }
 
-  async addCategory(category: Category): Promise<number> {
+  async addCategory(category: Omit<Category, 'id'>): Promise<number> {
     const categories = await this.getCategories();
-    const newId = categories.length > 0 ? Math.max(...categories.map(c => c.id || 0)) + 1 : 1;
-    const newCategory = { ...category, id: newId, createdAt: new Date().toISOString() };
+    const newId = categories.length > 0 ? Math.max(...categories.map(c => c.id)) + 1 : 1;
+    const newCategory = { ...category, id: newId };
     categories.push(newCategory);
     this.setItem('categories', categories);
     return newId;
@@ -54,9 +87,9 @@ class WebStorageFallback {
     return this.getItem('links') || [];
   }
 
-  async addLink(link: Link): Promise<number> {
+  async addLink(link: Omit<Link, 'id'>): Promise<number> {
     const links = await this.getAllLinks();
-    const newId = links.length > 0 ? Math.max(...links.map(l => l.id || 0)) + 1 : 1;
+    const newId = links.length > 0 ? Math.max(...links.map(l => l.id)) + 1 : 1;
     const newLink = { ...link, id: newId, createdAt: new Date().toISOString() };
     links.push(newLink);
     this.setItem('links', links);
@@ -87,238 +120,246 @@ class WebStorageFallback {
     return false;
   }
 
-  async initialize(): Promise<void> {
-    // Initialize with default categories if none exist
+  async updateCategory(category: Category): Promise<boolean> {
     const categories = await this.getCategories();
-    if (categories.length === 0) {
-      await this.addCategory({ name: 'Videos', icon: 'video' });
-      await this.addCategory({ name: 'Images', icon: 'image' });
-    }
+    const index = categories.findIndex(c => c.id === category.id);
+    if (index === -1) return false;
+    categories[index] = category;
+    this.setItem('categories', categories);
+    return true;
+  }
+
+  async updateLink(link: Link): Promise<boolean> {
+    const links = await this.getAllLinks();
+    const index = links.findIndex(l => l.id === link.id);
+    if (index === -1) return false;
+    links[index] = link;
+    this.setItem('links', links);
+    return true;
   }
 }
 
-class DatabaseService {
-  private sqlite: SQLiteConnection;
-  private db!: SQLiteDBConnection;
+class SQLiteStorage implements StorageInterface {
+  private db: SQLiteDBConnection;
   private initialized = false;
-  private initializationPromise: Promise<void> | null = null;
-  private webFallback: WebStorageFallback;
-  private isWebFallback = false;
 
-  constructor() {
-    this.sqlite = new SQLiteConnection(CapacitorSQLite);
-    this.webFallback = new WebStorageFallback();
-    console.log('DatabaseService instance created');
+  constructor(db: SQLiteDBConnection) {
+    this.db = db;
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
   }
 
   async init(): Promise<void> {
-    console.log('init() called, initialized:', this.initialized);
-    if (this.initialized) {
-      console.log('Database already initialized, skipping initialization');
-      return;
-    }
-
-    if (this.initializationPromise) {
-      console.log('Initialization already in progress, returning existing promise');
-      return this.initializationPromise;
-    }
-
-    console.log('Starting new initialization process');
-    this.initializationPromise = this._init();
-    
-    try {
-      await this.initializationPromise;
-      console.log('Initialization promise resolved successfully');
-    } catch (error) {
-      console.error('Initialization promise failed:', error);
-      this.initializationPromise = null;
-      throw error;
-    }
+    await this.initialize();
   }
 
-  private async _init(): Promise<void> {
-    try {
-      console.log('Starting database initialization...');
-      const platform = Capacitor.getPlatform();
-      console.log('Current platform:', platform);
-      
-      if (platform === 'web') {
-        console.log('Web platform detected, attempting SQLite initialization...');
+  async getCategories(): Promise<Category[]> {
+    const result = await this.db.query('SELECT * FROM categories ORDER BY id ASC');
+    return result.values || [];
+  }
+
+  async addCategory(category: Omit<Category, 'id'>): Promise<number> {
+    const result = await this.db.run(
+      'INSERT INTO categories (name, icon, color, description) VALUES (?, ?, ?, ?)',
+      [category.name, category.icon, category.color || null, category.description || null]
+    );
+    return result.changes?.lastId || 0;
+  }
+
+  async getLinksByCategory(categoryId: number): Promise<Link[]> {
+    const result = await this.db.query(
+      'SELECT * FROM links WHERE categoryId = ? ORDER BY id DESC',
+      [categoryId]
+    );
+    return result.values || [];
+  }
+
+  async getAllLinks(): Promise<Link[]> {
+    const result = await this.db.query('SELECT * FROM links ORDER BY id DESC');
+    return result.values || [];
+  }
+
+  async addLink(link: Omit<Link, 'id'>): Promise<number> {
+    const result = await this.db.run(
+      'INSERT INTO links (url, title, description, thumbnail, favicon, categoryId, type) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [link.url, link.title || null, link.description || null, link.thumbnail || null, link.favicon || null, link.categoryId, link.type]
+    );
+    return result.changes?.lastId || 0;
+  }
+
+  async deleteLink(id: number): Promise<boolean> {
+    const result = await this.db.run('DELETE FROM links WHERE id = ?', [id]);
+    return result.changes?.changes > 0;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    const result = await this.db.run('DELETE FROM categories WHERE id = ?', [id]);
+    return result.changes?.changes > 0;
+  }
+
+  async updateCategory(category: Category): Promise<boolean> {
+    const result = await this.db.run(
+      'UPDATE categories SET name = ?, icon = ?, color = ?, description = ? WHERE id = ?',
+      [category.name, category.icon, category.color || null, category.description || null, category.id]
+    );
+    return result.changes?.changes > 0;
+  }
+
+  async updateLink(link: Link): Promise<boolean> {
+    const result = await this.db.run(
+      'UPDATE links SET url = ?, title = ?, description = ?, thumbnail = ?, favicon = ?, categoryId = ?, type = ? WHERE id = ?',
+      [link.url, link.title || null, link.description || null, link.thumbnail || null, link.favicon || null, link.categoryId, link.type, link.id]
+    );
+    return result.changes?.changes > 0;
+  }
+
+  async closeConnection(): Promise<void> {
+    await this.db.close();
+  }
+}
+
+export class DatabaseService {
+  private storage: StorageInterface | null = null;
+  private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
+  private sqlite: SQLiteConnection;
+  public isWebFallback = false;
+  
+  constructor() {
+    this.sqlite = new SQLiteConnection(CapacitorSQLite);
+  }
+
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    
+    this.initializationPromise = (async () => {
+      try {
+        // Check if we're in a web environment
+        const platform = Capacitor.getPlatform();
+        
+        if (platform === 'web') {
+          // For web, we need to initialize the jeep-sqlite element
+          const jeepSqliteEl = document.querySelector('jeep-sqlite');
+          if (!jeepSqliteEl) {
+            console.warn('jeep-sqlite element not found, falling back to web storage');
+            this.storage = new WebStorageFallback();
+            await this.storage.init();
+            this.initialized = true;
+            this.isWebFallback = true;
+            return;
+          }
+          
+          // Initialize the web platform with timeout
+          try {
+            await Promise.race([
+              this.sqlite.initWebStore(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Web store initialization timed out')), 5000)
+              )
+            ]);
+          } catch (error) {
+            console.warn('Web store initialization failed, falling back to web storage:', error);
+            this.storage = new WebStorageFallback();
+            await this.storage.init();
+            this.initialized = true;
+            this.isWebFallback = true;
+            return;
+          }
+        }
+        
+        // Try to connect to SQLite with timeout
         try {
-          // Try to initialize SQLite for web with a timeout
-          console.log('Calling initWebStore()...');
+          const platformResult = await Promise.race([
+            this.sqlite.checkConnectionsConsistency(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection check timed out')), 5000)
+            )
+          ]) as { result: boolean };
           
-          // Create a promise that rejects after 5 seconds
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('SQLite web initialization timed out')), 5000);
-          });
+          const isConnectionResult = await Promise.race([
+            this.sqlite.isConnection('linkstash', false),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection check timed out')), 5000)
+            )
+          ]) as { result: boolean };
           
-          // Race the initialization against the timeout
+          if (platformResult.result && isConnectionResult.result) {
+            const db = await Promise.race([
+              this.sqlite.retrieveConnection('linkstash', false),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Connection retrieval timed out')), 5000)
+              )
+            ]) as SQLiteDBConnection;
+            
+            if (db) {
+              this.storage = new SQLiteStorage(db);
+              await this.storage.init();
+              this.initialized = true;
+              console.log('SQLite storage initialized successfully');
+              return;
+            }
+          }
+          
+          // If we get here, we need to create a new connection
+          const db = await Promise.race([
+            this.sqlite.createConnection(
+              'linkstash',
+              false,
+              'no-encryption',
+              1,
+              false
+            ),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection creation timed out')), 5000)
+            )
+          ]) as SQLiteDBConnection;
+          
           await Promise.race([
-            this.sqlite.initWebStore(),
-            timeoutPromise
+            db.open(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Database open timed out')), 5000)
+            )
           ]);
           
-          console.log('Web store initialized successfully');
+          this.storage = new SQLiteStorage(db);
+          await this.storage.init();
+          this.initialized = true;
+          console.log('SQLite storage initialized successfully');
         } catch (error) {
-          console.warn('Failed to initialize SQLite for web, falling back to localStorage:', error);
-          this.isWebFallback = true;
-          await this.webFallback.initialize();
-          this.initialized = true;
-          console.log('Web fallback storage initialized successfully');
-          return;
-        }
-      }
-
-      // If we're here, either we're on a native platform or SQLite web initialization succeeded
-      console.log('Creating database connection...');
-      try {
-        this.db = await this.sqlite.createConnection('linkstash_db', false, 'no-encryption', 1, false);
-        console.log('Database connection created successfully');
-      } catch (error) {
-        console.error('Error creating database connection:', error);
-        if (platform === 'web') {
-          console.warn('Falling back to localStorage after connection error');
-          this.isWebFallback = true;
-          await this.webFallback.initialize();
-          this.initialized = true;
-          return;
-        }
-        throw new Error('Failed to create connection: ' + (error instanceof Error ? error.message : String(error)));
-      }
-      
-      console.log('Opening database connection...');
-      try {
-        await this.db.open();
-        console.log('Database connection opened');
-      } catch (error) {
-        console.error('Error opening database connection:', error);
-        if (platform === 'web') {
-          console.warn('Falling back to localStorage after open error');
-          this.isWebFallback = true;
-          await this.webFallback.initialize();
-          this.initialized = true;
-          return;
-        }
-        throw new Error('Failed to open connection: ' + (error instanceof Error ? error.message : String(error)));
-      }
-
-      console.log('Creating tables if not exist...');
-      const queryCategories = `
-        CREATE TABLE IF NOT EXISTS categories (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          icon TEXT NOT NULL,
-          color TEXT,
-          createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-      `;
-
-      const queryLinks = `
-        CREATE TABLE IF NOT EXISTS links (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          url TEXT NOT NULL,
-          title TEXT,
-          description TEXT,
-          thumbnail TEXT,
-          favicon TEXT,
-          categoryId INTEGER NOT NULL,
-          type TEXT NOT NULL,
-          createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
-        );
-      `;
-
-      try {
-        await this.db.execute(queryCategories);
-        console.log('Categories table created/verified');
-        
-        await this.db.execute(queryLinks);
-        console.log('Links table created/verified');
-
-        // Check if favicon column exists, if not add it
-        try {
-          await this.db.query('SELECT favicon FROM links LIMIT 1');
-          console.log('Favicon column exists');
-        } catch (error) {
-          console.log('Favicon column does not exist, adding it...');
-          await this.db.execute('ALTER TABLE links ADD COLUMN favicon TEXT');
-          console.log('Favicon column added successfully');
+          console.error('Error initializing SQLite storage:', error);
+          throw error; // Re-throw to be caught by the outer catch
         }
       } catch (error) {
-        console.error('Error creating tables:', error);
-        if (platform === 'web') {
-          console.warn('Falling back to localStorage after table creation error');
-          this.isWebFallback = true;
-          await this.webFallback.initialize();
-          this.initialized = true;
-          return;
-        }
-        throw new Error('Failed to create tables: ' + (error instanceof Error ? error.message : String(error)));
+        console.error('Error initializing storage:', error);
+        // Fallback to web storage
+        this.storage = new WebStorageFallback();
+        await this.storage.init();
+        this.initialized = true;
+        this.isWebFallback = true;
+        console.log('Web storage fallback initialized');
       }
-
-      console.log('Checking for default categories...');
-      try {
-        const result = await this.db.query("SELECT COUNT(*) as count FROM categories");
-        
-        if (result.values && result.values[0].count === 0) {
-          console.log('No categories found, adding default categories...');
-          await this.db.run(`
-            INSERT INTO categories (name, icon) VALUES 
-            ('Videos', 'video'),
-            ('Images', 'image')
-          `, []);
-          console.log('Default categories added');
-        } else {
-          console.log('Default categories already exist');
-        }
-      } catch (error) {
-        console.error('Error checking default categories:', error);
-        if (platform === 'web') {
-          console.warn('Falling back to localStorage after default categories error');
-          this.isWebFallback = true;
-          await this.webFallback.initialize();
-          this.initialized = true;
-          return;
-        }
-        throw new Error('Failed to check/add default categories: ' + (error instanceof Error ? error.message : String(error)));
-      }
-
-      this.initialized = true;
-      console.log('Database initialization completed successfully');
-    } catch (error) {
-      console.error('Error initializing database:', error);
-      this.initialized = false;
-      this.initializationPromise = null;
-      throw error;
-    }
+    })();
+    
+    return this.initializationPromise;
   }
 
   async getCategories(): Promise<Category[]> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.getCategories();
-      }
-      const result = await this.db.query('SELECT * FROM categories ORDER BY id ASC');
-      return result.values || [];
+      return await this.storage!.getCategories();
     } catch (error) {
       console.error('Error getting categories:', error);
       return [];
     }
   }
 
-  async addCategory(category: Category): Promise<number> {
+  async addCategory(category: Omit<Category, 'id'>): Promise<number> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.addCategory(category);
-      }
-      const result = await this.db.run(
-        'INSERT INTO categories (name, icon, color) VALUES (?, ?, ?)',
-        [category.name, category.icon, category.color || null]
-      );
-      return result.changes?.lastId || 0;
+      return await this.storage!.addCategory(category);
     } catch (error) {
       console.error('Error adding category:', error);
       return 0;
@@ -328,14 +369,7 @@ class DatabaseService {
   async getLinksByCategory(categoryId: number): Promise<Link[]> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.getLinksByCategory(categoryId);
-      }
-      const result = await this.db.query(
-        'SELECT * FROM links WHERE categoryId = ? ORDER BY id DESC',
-        [categoryId]
-      );
-      return result.values || [];
+      return await this.storage!.getLinksByCategory(categoryId);
     } catch (error) {
       console.error('Error getting links by category:', error);
       return [];
@@ -345,28 +379,17 @@ class DatabaseService {
   async getAllLinks(): Promise<Link[]> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.getAllLinks();
-      }
-      const result = await this.db.query('SELECT * FROM links ORDER BY id DESC');
-      return result.values || [];
+      return await this.storage!.getAllLinks();
     } catch (error) {
       console.error('Error getting all links:', error);
       return [];
     }
   }
 
-  async addLink(link: Link): Promise<number> {
+  async addLink(link: Omit<Link, 'id'>): Promise<number> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.addLink(link);
-      }
-      const result = await this.db.run(
-        'INSERT INTO links (url, title, description, thumbnail, favicon, categoryId, type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [link.url, link.title || null, link.description || null, link.thumbnail || null, link.favicon || null, link.categoryId, link.type]
-      );
-      return result.changes?.lastId || 0;
+      return await this.storage!.addLink(link);
     } catch (error) {
       console.error('Error adding link:', error);
       return 0;
@@ -376,11 +399,7 @@ class DatabaseService {
   async deleteLink(id: number): Promise<boolean> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.deleteLink(id);
-      }
-      const result = await this.db.run('DELETE FROM links WHERE id = ?', [id]);
-      return result.changes?.changes > 0;
+      return await this.storage!.deleteLink(id);
     } catch (error) {
       console.error('Error deleting link:', error);
       return false;
@@ -390,30 +409,47 @@ class DatabaseService {
   async deleteCategory(id: number): Promise<boolean> {
     try {
       await this.init();
-      if (this.isWebFallback) {
-        return this.webFallback.deleteCategory(id);
-      }
-      const result = await this.db.run('DELETE FROM categories WHERE id = ?', [id]);
-      return result.changes?.changes > 0;
+      return await this.storage!.deleteCategory(id);
     } catch (error) {
       console.error('Error deleting category:', error);
       return false;
     }
   }
 
-  async closeConnection(): Promise<void> {
-    if (this.db && !this.isWebFallback) {
-      await this.sqlite.closeConnection('linkstash_db', false);
+  async updateCategory(category: Category): Promise<boolean> {
+    try {
+      await this.init();
+      return await this.storage!.updateCategory(category);
+    } catch (error) {
+      console.error('Error updating category:', error);
+      return false;
     }
   }
 
-  // Method to check which storage method is being used
-  getStorageType(): string {
-    if (this.isWebFallback) {
-      return 'localStorage';
-    } else {
-      return 'SQLite';
+  async updateLink(link: Link): Promise<boolean> {
+    try {
+      await this.init();
+      return await this.storage!.updateLink(link);
+    } catch (error) {
+      console.error('Error updating link:', error);
+      return false;
     }
+  }
+
+  async closeConnection(): Promise<void> {
+    if (!this.isWebFallback && this.storage instanceof SQLiteStorage) {
+      try {
+        await this.storage.closeConnection();
+        console.log('Database connection closed successfully');
+      } catch (error) {
+        console.error('Error closing database connection:', error);
+        throw error;
+      }
+    }
+  }
+  
+  getStorageType(): string {
+    return this.isWebFallback ? 'Web Storage' : 'SQLite';
   }
 }
 
