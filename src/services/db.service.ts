@@ -7,6 +7,7 @@ export interface Category {
   icon: string;
   color?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Link {
@@ -19,6 +20,7 @@ export interface Link {
   categoryId: number;
   type: 'image' | 'video' | 'file' | 'other';
   createdAt?: string;
+  updatedAt?: string;
 }
 
 // Web fallback storage using localStorage
@@ -85,6 +87,24 @@ class WebStorageFallback {
       return true;
     }
     return false;
+  }
+
+  async updateCategory(category: Category): Promise<boolean> {
+    const categories = await this.getCategories();
+    const index = categories.findIndex(c => c.id === category.id);
+    if (index === -1) return false;
+    categories[index] = { ...categories[index], ...category };
+    this.setItem('categories', categories);
+    return true;
+  }
+
+  async updateLink(link: Link): Promise<boolean> {
+    const links = await this.getAllLinks();
+    const index = links.findIndex(l => l.id === link.id);
+    if (index === -1) return false;
+    links[index] = { ...links[index], ...link };
+    this.setItem('links', links);
+    return true;
   }
 
   async initialize(): Promise<void> {
@@ -210,7 +230,8 @@ class DatabaseService {
           name TEXT NOT NULL,
           icon TEXT NOT NULL,
           color TEXT,
-          createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+          createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+          updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
         );
       `;
 
@@ -225,6 +246,7 @@ class DatabaseService {
           categoryId INTEGER NOT NULL,
           type TEXT NOT NULL,
           createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+          updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
         );
       `;
@@ -397,6 +419,40 @@ class DatabaseService {
       return result.changes?.changes > 0;
     } catch (error) {
       console.error('Error deleting category:', error);
+      return false;
+    }
+  }
+
+  async updateCategory(category: Category): Promise<boolean> {
+    try {
+      await this.init();
+      if (this.isWebFallback) {
+        return this.webFallback.updateCategory(category);
+      }
+      const result = await this.db.run(
+        'UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?',
+        [category.name, category.icon, category.color || null, category.id]
+      );
+      return result.changes?.changes > 0;
+    } catch (error) {
+      console.error('Error updating category:', error);
+      return false;
+    }
+  }
+
+  async updateLink(link: Link): Promise<boolean> {
+    try {
+      await this.init();
+      if (this.isWebFallback) {
+        return this.webFallback.updateLink(link);
+      }
+      const result = await this.db.run(
+        'UPDATE links SET url = ?, title = ?, description = ?, thumbnail = ?, favicon = ?, categoryId = ?, type = ? WHERE id = ?',
+        [link.url, link.title || null, link.description || null, link.thumbnail || null, link.favicon || null, link.categoryId, link.type, link.id]
+      );
+      return result.changes?.changes > 0;
+    } catch (error) {
+      console.error('Error updating link:', error);
       return false;
     }
   }

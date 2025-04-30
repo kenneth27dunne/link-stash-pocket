@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { App } from '@capacitor/app';
+import { PluginListenerHandle } from '@capacitor/core';
+import { App, BackButtonListenerEvent } from '@capacitor/app';
 import { useAppContext } from '../contexts/AppContext';
+import { toast } from 'react-hot-toast';
 
 interface BackButtonHandlerProps {
   children: React.ReactNode;
@@ -13,6 +15,8 @@ const BackButtonHandler: React.FC<BackButtonHandlerProps> = ({ children }) => {
   const { closeModal, isModalOpen } = useAppContext();
   const lastPathRef = useRef<string>(location.pathname);
   const isFirstBackRef = useRef<boolean>(true);
+  const backPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const listenerHandleRef = useRef<PluginListenerHandle | null>(null);
 
   useEffect(() => {
     // Update the last path when location changes
@@ -20,58 +24,56 @@ const BackButtonHandler: React.FC<BackButtonHandlerProps> = ({ children }) => {
   }, [location]);
 
   useEffect(() => {
-    const handleBackButton = async () => {
-      console.log('Back button pressed');
-      console.log('Current path:', location.pathname);
-      console.log('Last path:', lastPathRef.current);
-      console.log('Is modal open:', isModalOpen);
-      console.log('Is first back:', isFirstBackRef.current);
-
-      // If a modal is open, close it first
+    const handleBackButton = (event: BackButtonListenerEvent) => {
       if (isModalOpen) {
-        console.log('Closing modal');
         closeModal();
+        if (event.canGoBack === false) {
+          // If Capacitor says we can't go back, maybe exit?
+        } else {
+          // We handled it by closing the modal, maybe prevent default hardware back?
+          // This part depends heavily on desired UX and Capacitor behavior
+        }
         return;
       }
 
-      // If we're in a category view, go back to the main view
-      if (location.pathname.startsWith('/category/')) {
-        console.log('Navigating back to main view');
-        navigate('/');
-        return;
-      }
-
-      // If we're on the main view and it's the first back press, show a toast
-      if (location.pathname === '/' && isFirstBackRef.current) {
-        console.log('First back press on main view');
-        isFirstBackRef.current = false;
-        
-        // Show a toast or message that pressing back again will exit the app
-        // You can implement this with your preferred notification system
-        
-        // Set a timeout to reset the first back flag
-        setTimeout(() => {
-          isFirstBackRef.current = true;
-        }, 2000);
-        
-        return;
-      }
-
-      // If we're on the main view and it's not the first back press, exit the app
-      if (location.pathname === '/') {
-        console.log('Exiting app');
-        App.exitApp();
+      if (location.pathname !== '/') {
+        isFirstBackRef.current = true;
+        lastPathRef.current = location.pathname;
+      } else {
+        if (isFirstBackRef.current) {
+          toast('Press back again to exit');
+          isFirstBackRef.current = false;
+          if (backPressTimerRef.current) clearTimeout(backPressTimerRef.current);
+          backPressTimerRef.current = setTimeout(() => {
+            isFirstBackRef.current = true;
+          }, 2000);
+          // Prevent default back action (exit) on first press
+          // How to prevent default might depend on Capacitor version/API
+          // Often, just not calling event.canGoBack = false (if applicable) might be enough
+          // Or check Capacitor docs for explicit preventDefault equivalent.
+        } else {
+          App.exitApp();
+        }
       }
     };
 
-    // Register the back button handler
-    App.addListener('backButton', handleBackButton);
+    // Add the listener and store the handle
+    let isMounted = true;
+    App.addListener('backButton', handleBackButton).then(handle => {
+      if (isMounted) {
+        listenerHandleRef.current = handle;
+      }
+    });
 
-    // Clean up the listener when the component unmounts
+    // Clean up listener and timer on unmount or path change
     return () => {
-      App.removeAllListeners();
+      isMounted = false;
+      listenerHandleRef.current?.remove();
+      if (backPressTimerRef.current) {
+        clearTimeout(backPressTimerRef.current);
+      }
     };
-  }, [location, navigate, closeModal, isModalOpen]);
+  }, [location.pathname, isModalOpen, closeModal, navigate]);
 
   return <>{children}</>;
 };

@@ -1,19 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { dbService, Category, Link } from '../services/db.service';
+import { dataService, Category, Link } from '../services/data.service';
 import { useToast } from '@/hooks/use-toast';
-import { syncService } from '../services/sync.service';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   categories: Category[];
-  links: Link[];
   loading: boolean;
   refreshData: () => Promise<void>;
-  addCategory: (category: Category) => Promise<number>;
+  addCategory: (category: Category) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<boolean>;
-  addLink: (link: Link) => Promise<number>;
-  deleteLink: (id: number) => Promise<boolean>;
   deleteCategory: (id: number) => Promise<boolean>;
-  getLinksForCategory: (categoryId: number) => Link[];
   selectedCategory: Category | null;
   setSelectedCategory: (category: Category | null) => void;
   isModalOpen: boolean;
@@ -25,11 +21,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [links, setLinks] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const openModal = () => {
     setIsModalOpen(true);
@@ -40,21 +36,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshData = async () => {
+    if (!user) {
+      console.log('AppContext: No authenticated user, clearing category data.');
+      setCategories([]);
+      setLoading(false);
+      return;
+    }
+    
+    console.log('AppContext: Refreshing categories for user:', user.id);
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      console.log('AppContext: Refreshing data');
-      const fetchedCategories = await dbService.getCategories();
-      console.log('AppContext: Categories fetched:', fetchedCategories);
-      const fetchedLinks = await dbService.getAllLinks();
-      console.log('AppContext: Links fetched:', fetchedLinks);
-      
+      const fetchedCategories = await dataService.getCategories();
+      console.log('AppContext: Categories fetched:', fetchedCategories.length);
       setCategories(fetchedCategories);
-      setLinks(fetchedLinks);
     } catch (error) {
-      console.error('AppContext: Error refreshing data:', error);
+      console.error('AppContext: Error refreshing categories:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load data',
+        description: 'Failed to load categories',
         variant: 'destructive',
       });
     } finally {
@@ -62,171 +62,110 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addCategory = async (category: Category): Promise<number> => {
+  const addCategory = async (category: Category): Promise<Category | null> => {
     try {
-      const id = await dbService.addCategory(category);
-      if (id > 0) {
-        await refreshData();
-        toast({
-          title: 'Category Added',
-          description: `"${category.name}" category has been created`,
-        });
+      console.log('AppContext: Adding category', category);
+      if (!user) {
+        console.error('AppContext: No authenticated user, cannot add category');
+        toast({ title: 'Error', description: 'You must be logged in to add categories', variant: 'destructive' });
+        return null;
       }
-      return id;
+      
+      const newCategoryFromServer = await dataService.addCategory(category);
+      console.log('AppContext: Category added from server:', newCategoryFromServer);
+      
+      if (newCategoryFromServer?.id) {
+        setCategories(prev => [newCategoryFromServer, ...prev]);
+        toast({ title: 'Success', description: 'Category added successfully' });
+        return newCategoryFromServer;
+      } else {
+        toast({ title: 'Warning', description: 'Category may not have been saved correctly', variant: 'destructive' });
+        return null;
+      }
     } catch (error) {
       console.error('Error adding category:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add category',
-        variant: 'destructive',
-      });
-      return 0;
+      toast({ title: 'Error', description: 'Failed to add category', variant: 'destructive' });
+      return null;
     }
   };
 
   const updateCategory = async (category: Category): Promise<boolean> => {
     try {
-      const success = await dbService.updateCategory(category);
-      if (success) {
-        await refreshData();
-        toast({
-          title: 'Category Updated',
-          description: `"${category.name}" has been updated successfully`,
-        });
-        return true;
+      console.log('AppContext: Updating category', category);
+      if (!user) {
+        console.error('AppContext: No authenticated user, cannot update category');
+        toast({ title: 'Error', description: 'You must be logged in to update categories', variant: 'destructive' });
+        return false;
       }
-      toast({
-        title: 'Error',
-        description: 'Failed to update category',
-        variant: 'destructive',
-      });
-      return false;
+      if (!category.id || !Number.isInteger(category.id) || category.id <= 0) {
+        console.error(`AppContext: Invalid category ID for update: ${category.id}`);
+        return false;
+      }
+      
+      const result = await dataService.updateCategory(category);
+      console.log('AppContext: Category update result:', result, 'for ID:', category.id);
+      
+      if (result) {
+        setCategories(prev => prev.map(c => c.id === category.id ? { ...category } : c));
+        toast({ title: 'Success', description: 'Category updated successfully' });
+        return true;
+      } else {
+        toast({ title: 'Warning', description: 'Category may not have been updated correctly', variant: 'destructive' });
+        return false;
+      }
     } catch (error) {
       console.error('Error updating category:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update category',
-        variant: 'destructive',
-      });
-      return false;
-    }
-  };
-
-  const addLink = async (link: Link): Promise<number> => {
-    try {
-      const id = await dbService.addLink(link);
-      if (id > 0) {
-        await refreshData();
-        toast({
-          title: 'Link Saved',
-          description: 'Your link has been saved successfully',
-        });
-      }
-      return id;
-    } catch (error) {
-      console.error('Error adding link:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save link',
-        variant: 'destructive',
-      });
-      return 0;
-    }
-  };
-
-  const deleteLink = async (id: number): Promise<boolean> => {
-    try {
-      const success = await dbService.deleteLink(id);
-      if (success) {
-        await refreshData();
-        toast({
-          title: 'Link Deleted',
-          description: 'Link has been removed',
-        });
-      }
-      return success;
-    } catch (error) {
-      console.error('Error deleting link:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete link',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to update category', variant: 'destructive' });
       return false;
     }
   };
 
   const deleteCategory = async (id: number): Promise<boolean> => {
     try {
-      const success = await dbService.deleteCategory(id);
-      if (success) {
-        await refreshData();
-        setSelectedCategory(null);
-        toast({
-          title: 'Category Deleted',
-          description: 'Category and all its links have been removed',
-        });
+      console.log('AppContext: Deleting category with ID:', id);
+      if (!user) {
+        console.error('AppContext: No authenticated user, cannot delete category');
+        toast({ title: 'Error', description: 'You must be logged in to delete categories', variant: 'destructive' });
+        return false;
       }
-      return success;
+      if (!id || !Number.isInteger(id) || id <= 0) {
+        console.error(`AppContext: Invalid category ID for deletion: ${id}`);
+        return false;
+      }
+      
+      const result = await dataService.deleteCategory(id);
+      console.log('AppContext: Category deletion result:', result, 'for ID:', id);
+      
+      if (result) {
+        setCategories(prev => prev.filter(category => category.id !== id));
+        toast({ title: 'Success', description: 'Category deleted successfully' });
+        return true;
+      } else {
+        toast({ title: 'Warning', description: 'Category may not have been deleted correctly', variant: 'destructive' });
+        return false;
+      }
     } catch (error) {
       console.error('Error deleting category:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete category',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to delete category', variant: 'destructive' });
       return false;
     }
   };
-
-  const getLinksForCategory = (categoryId: number): Link[] => {
-    return links.filter(link => link.categoryId === categoryId);
-  };
-
+  
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        console.log('AppContext: Starting data refresh');
-        await refreshData();
-        
-        // Initialize sync service and perform initial sync if enabled
-        await syncService.init();
-        if (syncService.isCloudSyncEnabled()) {
-          console.log('AppContext: Performing initial sync');
-          await syncService.performBackgroundSync();
-        }
-      } catch (error) {
-        console.error('AppContext: Error refreshing data:', error);
-        toast({
-          title: 'Database Error',
-          description: 'Failed to load data',
-          variant: 'destructive',
-        });
-      }
-    };
-
-    initializeData();
-
-    return () => {
-      dbService.closeConnection().catch(err => {
-        console.error('Error closing database connection:', err);
-      });
-    };
-  }, []);
-
+    console.log('AppContext: useEffect triggered. User ID:', user?.id);
+    refreshData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  
   return (
     <AppContext.Provider
       value={{
         categories,
-        links,
         loading,
         refreshData,
         addCategory,
         updateCategory,
-        addLink,
-        deleteLink,
         deleteCategory,
-        getLinksForCategory,
         selectedCategory,
         setSelectedCategory,
         isModalOpen,

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "lint": {
+    "include": ["*.ts"],
+    "exclude": ["node_modules/"]
+  },
+  "imports": {
+    "cheerio": "https://esm.sh/cheerio@1.0.0-rc.12",
+    "linkifyjs": "https://esm.sh/linkifyjs@4.1.1",
+    "http/server": "https://deno.land/std@0.177.0/http/server.ts"
+  }
+} 

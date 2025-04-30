@@ -1,5 +1,10 @@
 import { toast } from '@/hooks/use-toast';
 import { Capacitor } from '@capacitor/core';
+import { supabase } from '@/lib/supabase';
+
+// Extract the Supabase URL and anon key from environment variables
+// These should be the same values used to initialize the Supabase client
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 interface LinkMetadata {
   title: string;
@@ -7,6 +12,7 @@ interface LinkMetadata {
   thumbnail?: string;
   favicon?: string;
   type: 'image' | 'video' | 'file' | 'other';
+  suggestedCategory?: string;
 }
 
 class LinkMetadataService {
@@ -19,6 +25,54 @@ class LinkMetadataService {
       const type = this.detectContentType(url);
       console.log('Detected content type:', type);
 
+      // First try using the Supabase Edge Function (works on all platforms)
+      try {
+        console.log('Attempting to use Supabase Edge Function');
+        
+        // Try a direct fetch with anon key first (may work better with CORS issues)
+        if (SUPABASE_ANON_KEY) {
+          const functionUrl = 'https://fjluhgyxjqrtifscflje.supabase.co/functions/v1/get-link-metadata';
+          console.log('Trying direct fetch to Edge Function with anon key');
+          
+          const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ url })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result?.metadata) {
+              console.log('Metadata fetched successfully from Edge Function (direct fetch)');
+              return result.metadata;
+            }
+          } else {
+            console.warn('Direct fetch to Edge Function failed:', response.status);
+          }
+        }
+        
+        // Fall back to using the SDK
+        console.log('Trying SDK invocation');
+        const { data, error } = await supabase.functions.invoke('get-link-metadata', {
+          body: { url }
+        });
+        
+        if (!error && data?.metadata) {
+          console.log('Metadata fetched successfully from Edge Function');
+          return data.metadata;
+        }
+        
+        console.warn('Edge Function failed or not available:', error);
+        console.warn('Falling back to client-side extraction');
+      } catch (err) {
+        console.warn('Error calling Edge Function, falling back to client-side extraction:', err);
+      }
+
+      // Fall back to client-side extraction if Edge Function fails
       // For YouTube links, we can use their oEmbed API
       if (url.includes('youtube.com') || url.includes('youtu.be')) {
         console.log('Detected YouTube URL');
@@ -42,6 +96,7 @@ class LinkMetadataService {
       }
 
       // For other links, we'll need to fetch the HTML and parse it
+      // This may not work well on Android, which is why we try the Edge Function first
       console.log('Fetching HTML content...');
       const response = await fetch(url, {
         headers: {
@@ -172,7 +227,8 @@ class LinkMetadataService {
     try {
       console.log('Starting getMetadata for URL:', url);
       
-      // Add a small delay on Android to ensure the network is ready
+      // On Android, we should prioritize the Edge Function approach
+      // but we'll still add a small delay to ensure the network is ready
       if (Capacitor.getPlatform() === 'android') {
         console.log('Adding delay for Android platform');
         await new Promise(resolve => setTimeout(resolve, 1000));

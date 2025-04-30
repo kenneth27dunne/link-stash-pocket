@@ -2,42 +2,102 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AppProvider } from "./contexts/AppContext";
-import { AuthProvider } from "./contexts/AuthContext";
-import { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AppProvider, useAppContext } from "./contexts/AppContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import CategoryView from "./pages/CategoryView";
 import NotFound from "./pages/NotFound";
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
+import Profile from "./pages/Profile";
 import InitialSetup from "./components/InitialSetup";
 import ShareHandler from "./components/ShareHandler";
 import BackButtonHandler from "./components/BackButtonHandler";
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  const [isInitializing, setIsInitializing] = useState(true);
+// Protected route component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen bg-gradient-main">
+      <p className="text-white">Loading...</p>
+    </div>;
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth/signin" replace />;
+  }
+  
+  return <>{children}</>;
+};
 
+// App routes component
+const AppRoutes = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { loading: appLoading } = useAppContext();
+
+  // 1. Handle initial authentication loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-main">
+        <p className="text-white">Loading Authentication...</p>
+      </div>
+    );
+  }
+
+  // 2. Handle app data loading/initial setup for logged-in users
+  if (user && appLoading) {
+    // Assuming InitialSetup is meant for post-auth app loading/setup
+    return <InitialSetup />; 
+  }
+
+  // 3. Auth is done, and app data (if relevant) is loaded - show main routes
+  return (
+    <BackButtonHandler>
+      <Routes>
+        <Route path="/auth/signin" element={<SignIn />} />
+        <Route path="/auth/signup" element={<SignUp />} />
+
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Index />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/category/:id" element={
+          <ProtectedRoute>
+            <CategoryView />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } />
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      {/* Keep Toasters and ShareHandler outside the conditional loading */}
+      <Toaster />
+      <SonnerToaster />
+      <ShareHandler />
+    </BackButtonHandler>
+  );
+};
+
+const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
           <AppProvider>
             <BrowserRouter>
-              <BackButtonHandler>
-                {isInitializing ? (
-                  <InitialSetup onComplete={() => setIsInitializing(false)} />
-                ) : (
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/category/:id" element={<CategoryView />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                )}
-                <Toaster />
-                <SonnerToaster />
-                <ShareHandler />
-              </BackButtonHandler>
+              <AppRoutes />
             </BrowserRouter>
           </AppProvider>
         </AuthProvider>

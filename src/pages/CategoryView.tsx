@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '../contexts/AppContext';
+import { dataService, Link } from '@/services/data.service';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
@@ -9,32 +11,68 @@ import AddLinkForm from '@/components/AddLinkForm';
 
 const CategoryView = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { categories, deleteCategory, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
+
   const categoryId = parseInt(id || '0', 10);
-  const { categories, getLinksForCategory, deleteCategory, deleteLink, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
+
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const navigate = useNavigate();
 
-  const category = categories.find(c => c.id === categoryId) || selectedCategory;
-  const links = getLinksForCategory(categoryId);
+  const category = categories.find(c => c.id === categoryId);
+
+  const { data: links = [], isLoading: isLoadingLinks, isError: isErrorLinks } = useQuery<Link[], Error>({
+    queryKey: ['links', categoryId],
+    queryFn: () => dataService.getLinksByCategory(categoryId),
+    enabled: !!categoryId,
+  });
+
+  const addLinkMutation = useMutation({
+    mutationFn: dataService.addLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['links', categoryId] });
+      handleCloseAddLink();
+    },
+  });
+
+  const updateLinkMutation = useMutation({
+    mutationFn: dataService.updateLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['links', categoryId] });
+    },
+  });
+
+  const deleteLinkMutation = useMutation({
+    mutationFn: dataService.deleteLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['links', categoryId] });
+    },
+  });
 
   useEffect(() => {
-    if (!category && categories.length > 0) {
-      setSelectedCategory(categories[0]);
-      navigate(`/category/${categories[0].id}`);
+    if (categoryId && !category && categories.length > 0) {
+      const firstCategory = categories[0];
+      if(firstCategory?.id) {
+          setSelectedCategory(firstCategory);
+          navigate(`/category/${firstCategory.id}`, { replace: true });
+      }
     } else if (category) {
       setSelectedCategory(category);
     }
-  }, [categoryId, categories]);
+  }, [categoryId, category, categories, navigate, setSelectedCategory]);
 
   const handleBack = () => {
     navigate('/');
   };
 
   const handleDeleteCategory = async () => {
+    setDeleteDialogOpen(false);
     const success = await deleteCategory(categoryId);
     if (success) {
       navigate('/');
+    } else {
+      closeModal();
     }
   };
 
@@ -58,10 +96,34 @@ const CategoryView = () => {
     closeModal();
   };
 
-  if (!category) {
+  if (!category && categories.length === 0) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-pulse text-white">Loading...</div>
+        <div className="animate-pulse text-white">Loading Categories...</div>
+      </div>
+    );
+  }
+  
+  if (isLoadingLinks) {
+     return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-pulse text-white">Loading Links...</div>
+      </div>   
+    );
+  }
+  
+  if (!category) {
+     return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-white">Category not found.</div>
+      </div>
+    );
+  }
+  
+  if (isErrorLinks) {
+     return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-red-500">Error loading links.</div>
       </div>
     );
   }
@@ -108,7 +170,11 @@ const CategoryView = () => {
         ) : (
           <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
             {links.map((link) => (
-              <LinkItem key={link.id} link={link} onDelete={deleteLink} />
+              <LinkItem 
+                key={link.id} 
+                link={link} 
+                onDelete={() => link.id && deleteLinkMutation.mutate(link.id)}
+              />
             ))}
           </div>
         )}
@@ -123,14 +189,17 @@ const CategoryView = () => {
         </Button>
       </footer>
 
-      {/* Add Link Dialog */}
       <Dialog open={addLinkOpen} onOpenChange={handleCloseAddLink}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
-          <AddLinkForm onClose={handleCloseAddLink} />
+          <AddLinkForm 
+            onClose={handleCloseAddLink} 
+            categoryId={categoryId}
+            addLinkMutate={addLinkMutation.mutate}
+            isAddingLink={addLinkMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
 
-      {/* Delete Category Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={handleCloseDeleteDialog}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <DialogHeader>

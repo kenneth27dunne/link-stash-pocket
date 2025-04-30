@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   server: {
     cleartext: true
   },
+  android: {
+    // Enable AndroidXWebView for compatibility
+    useLegacyBridge: false,
+    webContentsDebuggingEnabled: true,
+    allowMixedContent: true
+  },
   plugins: {
     CapacitorSQLite: {
       iosDatabaseLocation: 'Library/CapacitorDatabase',

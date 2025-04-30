@@ -12,11 +12,9 @@ interface CategoryCardProps {
 }
 
 const CategoryCard: React.FC<CategoryCardProps> = ({ category, onClick }) => {
-  const { getLinksForCategory, deleteCategory } = useAppContext();
+  const { deleteCategory } = useAppContext();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const links = getLinksForCategory(category.id || 0);
-  const count = links.length;
 
   const getIcon = () => {
     switch (category.icon) {
@@ -37,8 +35,15 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, onClick }) => {
   };
 
   const confirmDelete = async () => {
-    const success = await deleteCategory(category.id);
-    if (success) {
+    if (category.id) {
+      const success = await deleteCategory(category.id);
+      if (success) {
+        setDeleteDialogOpen(false);
+      } else {
+        setDeleteDialogOpen(false);
+      }
+    } else {
+      console.error("Cannot delete category without ID");
       setDeleteDialogOpen(false);
     }
   };
@@ -60,9 +65,6 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, onClick }) => {
           </div>
           <div className="flex-1">
             <h3 className="text-white text-xl font-semibold">{category.name}</h3>
-            <p className="text-white/70 text-sm">
-              {count} {count === 1 ? 'item' : 'items'}
-            </p>
           </div>
           <div className="flex space-x-2">
             <Button
