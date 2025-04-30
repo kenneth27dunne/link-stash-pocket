@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor, PluginListenerHandle } from '@capacitor/core';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +31,8 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const abandonOAuthTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const appStateListenerRef = useRef<PluginListenerHandle | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -40,7 +44,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.error('Error checking session:', error);
         setUser(null);
       } finally {
-        setLoading(false);
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) { 
+             setLoading(false);
+        }
       }
     };
 
@@ -48,15 +55,71 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        if (abandonOAuthTimerRef.current) {
+           clearTimeout(abandonOAuthTimerRef.current);
+           abandonOAuthTimerRef.current = null;
+        }
         console.log('Auth state changed:', _event, session?.user?.id);
         setUser(session?.user ?? null);
+        setLoading(false); 
       }
     );
 
     return () => {
       subscription.unsubscribe();
+      if (abandonOAuthTimerRef.current) {
+        clearTimeout(abandonOAuthTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+     let isMounted = true; 
+
+     const setupListener = async () => {
+        const handle = await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+           if (!isMounted) return;
+           
+           if (isActive) {
+              if (abandonOAuthTimerRef.current) clearTimeout(abandonOAuthTimerRef.current);
+              
+              abandonOAuthTimerRef.current = setTimeout(() => {
+                if (loadingRef.current && !userRef.current) { 
+                  console.log('OAuth flow likely abandoned, resetting loading state.');
+                  if(isMounted) setLoading(false); 
+                }
+                abandonOAuthTimerRef.current = null;
+              }, 2000); 
+           } else {
+             if (abandonOAuthTimerRef.current) {
+                clearTimeout(abandonOAuthTimerRef.current);
+                abandonOAuthTimerRef.current = null;
+             }
+           }
+        });
+        if (isMounted) {
+            appStateListenerRef.current = handle;
+        }
+     };
+     
+     setupListener();
+     
+     return () => {
+        isMounted = false;
+        appStateListenerRef.current?.remove();
+        if (abandonOAuthTimerRef.current) {
+           clearTimeout(abandonOAuthTimerRef.current);
+           abandonOAuthTimerRef.current = null;
+        }
+     };
+  }, []);
+  
+  const loadingRef = useRef(loading);
+  const userRef = useRef(user);
+  useEffect(() => {
+      loadingRef.current = loading;
+      userRef.current = user;
+  }, [loading, user]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -127,9 +190,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
+      
+      const isNative = Capacitor.isNativePlatform();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
+          redirectTo: isNative
+        ? 'linkstash://'         // deep-link back into the app
+        : window.location.origin
         }
       });
       if (error) throw error;
@@ -141,7 +209,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Memoize the context value
   const value = useMemo(() => ({
     user,
     loading,
@@ -149,7 +216,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signUp,
     signOut,
     signInWithGoogle,
-  }), [user, loading]); // Dependencies: only re-create when user or loading changes
+  }), [user, loading]);
 
   return (
     <AuthContext.Provider value={value}>

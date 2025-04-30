@@ -15,6 +15,8 @@ import Profile from "./pages/Profile";
 import InitialSetup from "./components/InitialSetup";
 import ShareHandler from "./components/ShareHandler";
 import BackButtonHandler from "./components/BackButtonHandler";
+import { App as CapacitorApp } from '@capacitor/app';
+import { supabase } from '@/lib/supabase';
 
 const queryClient = new QueryClient();
 
@@ -91,6 +93,37 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+        // Parse the URL fragment
+        const hash = url.split('#')[1]; 
+        if (!hash) {
+            console.error("No URL fragment found for session", url);
+            return;
+        }
+        
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+
+        if (accessToken && refreshToken) {
+            supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+            }).then(({ error }) => {
+                if (error) {
+                    console.error("Error setting session from URL:", error);
+                } else {
+                    console.log('📱 Deep-link login successful, session set.');
+                    // AuthProvider listener should pick up the new session
+                }
+            });
+        } else {
+            console.error("Tokens not found in URL fragment:", url);
+        }
+    });
+  }, []);    
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
