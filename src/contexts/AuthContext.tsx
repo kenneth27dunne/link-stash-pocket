@@ -168,16 +168,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      setUser(null);
-      
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('supabase.auth.') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      window.location.reload();
-      
       toast.success('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);

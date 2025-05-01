@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,12 +9,39 @@ import AddCategoryForm from '@/components/AddCategoryForm';
 import AddLinkForm from '@/components/AddLinkForm';
 import UserMenu from '@/components/UserMenu';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { dataService, Link } from '@/services/data.service';
+import { toast } from 'react-hot-toast';
 
 const Index = () => {
-  const { categories, loading, setSelectedCategory, openModal, closeModal } = useAppContext();
+  const { categories, loading, setSelectedCategory, openModal, closeModal, isModalOpen, refreshData } = useAppContext();
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const addLinkFromIndexMutation = useMutation({
+    mutationFn: dataService.addLink,
+    onSuccess: (data) => {
+      if (data?.category_id) {
+        queryClient.invalidateQueries({ queryKey: ['links', data.category_id] });
+      } else {
+          refreshData(); 
+      }
+      handleCloseAddLink();
+    },
+    onError: (error) => {
+      console.error("Failed to add link from index:", error);
+      toast.error("Failed to add link. Please try again.");
+    }
+  });
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      if (addCategoryOpen) setAddCategoryOpen(false);
+      if (addLinkOpen) setAddLinkOpen(false);
+    }
+  }, [isModalOpen]);
 
   const handleCategoryClick = (categoryId: number) => {
     const category = categories.find(c => c.id === categoryId);
@@ -43,6 +70,8 @@ const Index = () => {
     setAddLinkOpen(false);
     closeModal();
   };
+
+  const defaultCategoryId = categories[0]?.id || 0;
 
   return (
     <div className="flex flex-col h-screen bg-gradient-main">
@@ -108,8 +137,7 @@ const Index = () => {
         </Button>
       </footer>
 
-      {/* Add Category Dialog */}
-      <Dialog open={addCategoryOpen} onOpenChange={handleCloseAddCategory}>
+      <Dialog open={addCategoryOpen} onOpenChange={(open) => !open && handleCloseAddCategory()}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl">Add Category</DialogTitle>
@@ -118,13 +146,17 @@ const Index = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Add Link Dialog */}
-      <Dialog open={addLinkOpen} onOpenChange={handleCloseAddLink}>
+      <Dialog open={addLinkOpen} onOpenChange={(open) => !open && handleCloseAddLink()}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl">Add Link</DialogTitle>
           </DialogHeader>
-          <AddLinkForm onClose={handleCloseAddLink} />
+          <AddLinkForm 
+            onClose={handleCloseAddLink} 
+            categoryId={defaultCategoryId}
+            addLinkMutate={addLinkFromIndexMutation.mutate}
+            isAddingLink={addLinkFromIndexMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
     </div>

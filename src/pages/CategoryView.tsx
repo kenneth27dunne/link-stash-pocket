@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '../contexts/AppContext';
@@ -13,7 +13,7 @@ const CategoryView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { categories, deleteCategory, selectedCategory, setSelectedCategory, openModal, closeModal } = useAppContext();
+  const { categories, deleteCategory, selectedCategory, setSelectedCategory, openModal, closeModal, isModalOpen } = useAppContext();
 
   const categoryId = parseInt(id || '0', 10);
 
@@ -51,6 +51,13 @@ const CategoryView = () => {
   });
 
   useEffect(() => {
+    if (!isModalOpen) {
+      if (addLinkOpen) setAddLinkOpen(false);
+      if (deleteDialogOpen) setDeleteDialogOpen(false);
+    }
+  }, [isModalOpen]);
+
+  useEffect(() => {
     if (categoryId && !category && categories.length > 0) {
       const firstCategory = categories[0];
       if(firstCategory?.id) {
@@ -68,33 +75,33 @@ const CategoryView = () => {
 
   const handleDeleteCategory = async () => {
     setDeleteDialogOpen(false);
+    closeModal();
+    if (!categoryId) return;
     const success = await deleteCategory(categoryId);
     if (success) {
       navigate('/');
-    } else {
-      closeModal();
     }
   };
 
-  const handleOpenAddLink = () => {
+  const handleOpenAddLink = useCallback(() => {
     setAddLinkOpen(true);
     openModal();
-  };
+  }, [openModal]);
 
-  const handleCloseAddLink = () => {
+  const handleCloseAddLink = useCallback(() => {
     setAddLinkOpen(false);
     closeModal();
-  };
+  }, [closeModal]);
 
-  const handleOpenDeleteDialog = () => {
+  const handleOpenDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(true);
     openModal();
-  };
+  }, [openModal]);
 
-  const handleCloseDeleteDialog = () => {
+  const handleCloseDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
     closeModal();
-  };
+  }, [closeModal]);
 
   if (!category && categories.length === 0) {
     return (
@@ -189,7 +196,7 @@ const CategoryView = () => {
         </Button>
       </footer>
 
-      <Dialog open={addLinkOpen} onOpenChange={handleCloseAddLink}>
+      <Dialog open={addLinkOpen} onOpenChange={(open) => !open && handleCloseAddLink()}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <AddLinkForm 
             onClose={handleCloseAddLink} 
@@ -200,7 +207,7 @@ const CategoryView = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onOpenChange={handleCloseDeleteDialog}>
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => !open && handleCloseDeleteDialog()}>
         <DialogContent className="bg-gradient-main border-none sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl">Delete Category</DialogTitle>

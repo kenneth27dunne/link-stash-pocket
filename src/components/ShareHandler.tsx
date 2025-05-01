@@ -30,7 +30,7 @@ const extractUrl = (text: string): string | null => {
 const ShareHandler: React.FC = () => {
   const [sharedText, setSharedText] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
-  const { categories, loading, openModal, closeModal, refreshData } = useAppContext();
+  const { categories, loading, openModal, closeModal, refreshData, isModalOpen } = useAppContext();
   const queryClient = useQueryClient();
 
   const addLinkFromShareMutation = useMutation({
@@ -83,6 +83,13 @@ const ShareHandler: React.FC = () => {
   }, [handleCloseDialog]);
 
   useEffect(() => {
+    if (!isModalOpen && showDialog) {
+      setShowDialog(false);
+      setSharedText(null);
+    }
+  }, [isModalOpen, showDialog]);
+
+  useEffect(() => {
     const storedContent = localStorage.getItem('sharedContent');
     const globalContent = (window as any).sharedContent;
 
@@ -125,7 +132,7 @@ const ShareHandler: React.FC = () => {
   const defaultCategoryId = categories[0]?.id || 0;
 
   return (
-    <Dialog open={showDialog} onOpenChange={handleCloseDialog}>
+    <Dialog open={showDialog} onOpenChange={(open) => !open && handleCloseDialog()}>
       <DialogContent className="bg-gradient-main border-none sm:max-w-md">
         <AddLinkForm 
           initialUrl={sharedText} 

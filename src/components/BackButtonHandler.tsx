@@ -27,31 +27,31 @@ const BackButtonHandler: React.FC<BackButtonHandlerProps> = ({ children }) => {
     const handleBackButton = (event: BackButtonListenerEvent) => {
       if (isModalOpen) {
         closeModal();
-        if (event.canGoBack === false) {
-          // If Capacitor says we can't go back, maybe exit?
-        } else {
-          // We handled it by closing the modal, maybe prevent default hardware back?
-          // This part depends heavily on desired UX and Capacitor behavior
-        }
-        return;
+        // We handled it (closed modal). We might want to prevent the default
+        // back action here depending on desired Capacitor behavior.
+        // For now, just returning handles closing the modal.
+        return; 
       }
 
       if (location.pathname !== '/') {
-        isFirstBackRef.current = true;
-        lastPathRef.current = location.pathname;
+         // If not on the main page, perform standard back navigation
+         navigate(-1); 
+         // Reset first back press flag since we navigated away
+         isFirstBackRef.current = true; 
+         lastPathRef.current = location.pathname; 
       } else {
+        // On main view ('/') - Handle exit logic
         if (isFirstBackRef.current) {
           toast('Press back again to exit');
           isFirstBackRef.current = false;
           if (backPressTimerRef.current) clearTimeout(backPressTimerRef.current);
           backPressTimerRef.current = setTimeout(() => {
             isFirstBackRef.current = true;
-          }, 2000);
+          }, 2000); 
           // Prevent default back action (exit) on first press
-          // How to prevent default might depend on Capacitor version/API
-          // Often, just not calling event.canGoBack = false (if applicable) might be enough
-          // Or check Capacitor docs for explicit preventDefault equivalent.
+          // This might require specific Capacitor handling if event object allows
         } else {
+          // Second back press on main view, allow exit
           App.exitApp();
         }
       }
