@@ -5,6 +5,15 @@ import AddLinkForm from './AddLinkForm';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dataService, Link } from '@/services/data.service';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+// Define the interface for the native plugin
+interface ShareHandlerPlugin {
+  notifyShareHandlerReady(): Promise<void>;
+}
+
+// Register the plugin, ShareHandler is the name used in @CapacitorPlugin(name = "ShareHandler")
+const ShareHandlerNative = registerPlugin<ShareHandlerPlugin>('ShareHandler');
 
 const SHARED_CONTENT_KEY = 'linkstash_shared_content';
 
@@ -67,7 +76,6 @@ const ShareHandler: React.FC = () => {
     setShowDialog(true);
     openModal();
     localStorage.removeItem('sharedContent');
-    (window as any).sharedContent = null;
   }, [openModal]);
 
   const handleCloseDialog = useCallback(() => {
@@ -75,7 +83,7 @@ const ShareHandler: React.FC = () => {
     setSharedText(null);
     closeModal();
     localStorage.removeItem('sharedContent');
-    (window as any).sharedContent = null;
+    window.linkstashSharedContent = undefined;
   }, [closeModal]);
 
   const handleLinkSaved = useCallback(() => {
@@ -90,20 +98,30 @@ const ShareHandler: React.FC = () => {
   }, [isModalOpen, showDialog]);
 
   useEffect(() => {
-    const storedContent = localStorage.getItem('sharedContent');
-    const globalContent = (window as any).sharedContent;
+    if (ShareHandlerNative && typeof ShareHandlerNative.notifyShareHandlerReady === 'function') {
+      console.log('ShareHandler: Calling notifyShareHandlerReady to native.');
+      ShareHandlerNative.notifyShareHandlerReady().catch(error => {
+        console.error('ShareHandler: Error calling notifyShareHandlerReady:', error);
+      });
+    }
 
-    if (storedContent) {
+    if (window.linkstashSharedContent && !showDialog) {
+      console.log('ShareHandler: Processing initial window.linkstashSharedContent');
+      processSharedContent(window.linkstashSharedContent);
+      window.linkstashSharedContent = undefined;
+    }
+
+    const storedContent = localStorage.getItem('sharedContent');
+    if (!window.linkstashSharedContent && storedContent && !showDialog) {
+      console.log('ShareHandler: Processing initial localStorage sharedContent');
       processSharedContent(storedContent);
-    } else if (globalContent) {
-      processSharedContent(globalContent);
     }
 
     const handleShareReceived = (event: CustomEvent) => {
       const { text } = event.detail;
       if (text) {
         if (!showDialog) {
-          localStorage.setItem('sharedContent', text);
+          console.log('ShareHandler: Received shareReceived event with text:', text);
           processSharedContent(text);
         } else {
           toast.info("Already handling a shared link.");
@@ -120,6 +138,7 @@ const ShareHandler: React.FC = () => {
 
   useEffect(() => {
     if (!loading && window.linkstashSharedContent && !showDialog) {
+      console.log('ShareHandler: Processing window.linkstashSharedContent after loading');
       processSharedContent(window.linkstashSharedContent);
       window.linkstashSharedContent = undefined;
     }

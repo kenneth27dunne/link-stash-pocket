@@ -10,6 +10,8 @@ interface AppContextType {
   addCategory: (category: Category) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<boolean>;
   deleteCategory: (id: number) => Promise<boolean>;
+  updateLink: (link: Link) => Promise<boolean>;
+  deleteLink: (id: number) => Promise<boolean>;
   selectedCategory: Category | null;
   setSelectedCategory: (category: Category | null) => void;
   isModalOpen: boolean;
@@ -150,7 +152,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return false;
     }
   };
-  
+
+  const updateLink = async (link: Link): Promise<boolean> => {
+    try {
+      console.log('AppContext: Updating link', link);
+      if (!user) {
+        console.error('AppContext: No authenticated user, cannot update link');
+        toast({ title: 'Error', description: 'You must be logged in to update links', variant: 'destructive' });
+        return false;
+      }
+      if (!link.id || !Number.isInteger(link.id) || link.id <= 0) {
+        console.error(`AppContext: Invalid link ID for update: ${link.id}`);
+        return false;
+      }
+
+      const result = await dataService.updateLink(link);
+      console.log('AppContext: Link update result:', result, 'for ID:', link.id);
+
+      if (result) {
+        toast({ title: 'Success', description: 'Link updated successfully' });
+        return true;
+      } else {
+        toast({ title: 'Warning', description: 'Link may not have been updated correctly', variant: 'destructive' });
+        return false;
+      }
+    } catch (error) {
+      console.error('Error updating link:', error);
+      toast({ title: 'Error', description: 'Failed to update link', variant: 'destructive' });
+      return false;
+    }
+  };
+
+  const deleteLink = async (id: number): Promise<boolean> => {
+    try {
+      console.log('AppContext: Deleting link with ID:', id);
+      if (!user) {
+        console.error('AppContext: No authenticated user, cannot delete link');
+        toast({ title: 'Error', description: 'You must be logged in to delete links', variant: 'destructive' });
+        return false;
+      }
+      if (!id || !Number.isInteger(id) || id <= 0) {
+        console.error(`AppContext: Invalid link ID for deletion: ${id}`);
+        return false;
+      }
+
+      const result = await dataService.deleteLink(id);
+      console.log('AppContext: Link deletion result:', result, 'for ID:', id);
+
+      if (result) {
+        toast({ title: 'Success', description: 'Link deleted successfully' });
+        return true;
+      } else {
+        toast({ title: 'Warning', description: 'Link may not have been deleted correctly', variant: 'destructive' });
+        return false;
+      }
+    } catch (error) {
+      console.error('Error deleting link:', error);
+      toast({ title: 'Error', description: 'Failed to delete link', variant: 'destructive' });
+      return false;
+    }
+  };
+
   useEffect(() => {
     console.log('AppContext: useEffect triggered. User ID:', user?.id);
     refreshData();
@@ -166,6 +228,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addCategory,
         updateCategory,
         deleteCategory,
+        updateLink,
+        deleteLink,
         selectedCategory,
         setSelectedCategory,
         isModalOpen,

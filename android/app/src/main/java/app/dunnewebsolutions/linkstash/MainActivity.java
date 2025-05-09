@@ -7,12 +7,9 @@ import android.webkit.WebView;
 import androidx.webkit.WebViewCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
-import com.getcapacitor.PluginCall;
-import com.getcapacitor.PluginMethod;
-import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.Bridge;
+import java.util.ArrayList;
 
-@CapacitorPlugin(name = "ShareHandler")
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "LinkStash:ShareHandler";
     private String pendingSharedText = null;
@@ -27,7 +24,12 @@ public class MainActivity extends BridgeActivity {
                 // You might want to show a dialog here informing the user
             }
             
+            // Add plugins before calling super.onCreate
+            registerPlugin(ShareHandlerPlugin.class);
+            
+            // Call super after plugin registration but before handling intent
             super.onCreate(savedInstanceState);
+            
             Log.d(TAG, "onCreate called");
             handleIntent(getIntent());
         } catch (Exception e) {
@@ -73,16 +75,17 @@ public class MainActivity extends BridgeActivity {
                     Log.d(TAG, "Received shared text: " + sharedText);
                     
                     if (sharedText != null) {
-                        // Store the original text first
-                        pendingSharedText = sharedText;
-                        Log.d(TAG, "Stored original shared text: " + pendingSharedText);
+                        this.pendingSharedText = sharedText; // Always store it first
+                        Log.d(TAG, "Stored shared text into pendingSharedText: " + this.pendingSharedText);
                         
-                        // If the bridge is ready and initialized, send the event immediately
-                        if (bridge != null && isInitialized) {
-                            Log.d(TAG, "Bridge is ready, sending shared content immediately");
-                            sendSharedContent(sharedText);
+                        // If bridge is ready and JS has already signaled it's initialized, send immediately.
+                        // This handles shares when app is already warm and ShareHandler has called notifyShareHandlerReady.
+                        if (bridge != null && this.isInitialized) {
+                            Log.d(TAG, "Bridge and JS are ready, sending shared content immediately from handleIntent");
+                            sendSharedContent(this.pendingSharedText);
+                            this.pendingSharedText = null; // Clear after sending
                         } else {
-                            Log.d(TAG, "Bridge not ready or not initialized, will send later");
+                            Log.d(TAG, "Bridge not ready or JS not yet initialized. Shared text stored. Will send when JS signals ready.");
                         }
                     }
                 }
@@ -110,7 +113,7 @@ public class MainActivity extends BridgeActivity {
         return text; // Return original text if no URL found or error occurs
     }
 
-    private void sendSharedContent(String sharedText) {
+    public void sendSharedContent(String sharedText) {
         if (bridge != null) {
             try {
                 Log.d(TAG, "Sending shared content to bridge: " + sharedText);
@@ -145,28 +148,30 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         try {
             super.onResume();
-            Log.d(TAG, "onResume called, isInitialized: " + isInitialized);
+            Log.d(TAG, "onResume called. isInitialized: " + this.isInitialized + ". Pending text: " + this.pendingSharedText);
             
-            // Check if we have pending shared content and the bridge is ready
-            if (pendingSharedText != null && bridge != null) {
-                Log.d(TAG, "Found pending shared text: " + pendingSharedText);
-                // Wait a bit to ensure the app is fully initialized
-                bridge.getActivity().runOnUiThread(() -> {
-                    try {
-                        Log.d(TAG, "Waiting for app initialization...");
-                        Thread.sleep(1000); // Give the app time to initialize
-                        isInitialized = true;
-                        Log.d(TAG, "App initialized, sending pending shared content");
-                        sendSharedContent(pendingSharedText);
-                        pendingSharedText = null;
-                    } catch (InterruptedException e) {
-                        Log.e(TAG, "Error while waiting for initialization", e);
-                        e.printStackTrace();
-                    }
-                });
+            if (this.isInitialized && this.pendingSharedText != null && this.bridge != null) {
+                Log.d(TAG, "onResume: JS is initialized and pending text exists. Attempting to send.");
+                sendSharedContent(this.pendingSharedText);
+                this.pendingSharedText = null;
             }
+
         } catch (Exception e) {
             Log.e(TAG, "Error in onResume", e);
+        }
+    }
+
+    // These methods will be called by the plugin
+    public void setShareHandlerInitialized(boolean initialized) {
+        Log.d(TAG, "setShareHandlerInitialized called with: " + initialized);
+        this.isInitialized = initialized;
+    }
+    
+    public void checkPendingSharedContent() {
+        Log.d(TAG, "checkPendingSharedContent called, pendingSharedText: " + this.pendingSharedText);
+        if (this.pendingSharedText != null && this.bridge != null) {
+            sendSharedContent(this.pendingSharedText);
+            this.pendingSharedText = null;
         }
     }
 } 

@@ -181,6 +181,8 @@ const CategoryView = () => {
                 key={link.id} 
                 link={link} 
                 onDelete={() => link.id && deleteLinkMutation.mutate(link.id)}
+                updateLinkMutate={updateLinkMutation.mutate}
+                isUpdatingLink={updateLinkMutation.isPending}
               />
             ))}
           </div>

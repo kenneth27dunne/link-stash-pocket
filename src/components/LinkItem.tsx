@@ -11,10 +11,13 @@ import { Link as LinkType } from '../services/data.service';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import EditLinkForm from './EditLinkForm';
 import './LinkItem.css';
+import { UseMutateFunction } from '@tanstack/react-query';
 
 interface LinkItemProps {
   link: LinkType;
   onDelete: (id: number) => void;
+  updateLinkMutate: UseMutateFunction<boolean, Error, LinkType, unknown>;
+  isUpdatingLink: boolean;
 }
 
 // Predefined gradient colors
@@ -31,7 +34,7 @@ const gradients = [
   'from-cyan-500 to-sky-500',
 ];
 
-const LinkItem: React.FC<LinkItemProps> = ({ link }) => {
+const LinkItem: React.FC<LinkItemProps> = ({ link, onDelete, updateLinkMutate, isUpdatingLink }) => {
   const { deleteLink } = useAppContext();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const titleRef = useRef<HTMLSpanElement>(null);
@@ -72,7 +75,9 @@ const LinkItem: React.FC<LinkItemProps> = ({ link }) => {
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    await deleteLink(link.id || 0);
+    if (link.id) {
+      onDelete(link.id);
+    }
   };
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -179,7 +184,9 @@ const LinkItem: React.FC<LinkItemProps> = ({ link }) => {
           </DialogHeader>
           <EditLinkForm 
             link={link}
-            onClose={() => setEditDialogOpen(false)} 
+            onClose={() => setEditDialogOpen(false)}
+            updateLinkMutate={updateLinkMutate}
+            isUpdatingLink={isUpdatingLink}
           />
         </DialogContent>
       </Dialog>

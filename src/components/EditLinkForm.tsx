@@ -12,15 +12,22 @@ import { cn } from '@/lib/utils';
 import LinkThumbnail from './LinkThumbnail';
 import { Label } from "@/components/ui/label";
 import { Link, Category } from '../services/data.service';
+import { UseMutateFunction } from '@tanstack/react-query';
 
 interface EditLinkFormProps {
   link: Link;
   onClose: () => void;
-  onSave?: () => void;
+  updateLinkMutate: UseMutateFunction<boolean, Error, Link, unknown>;
+  isUpdatingLink: boolean;
 }
 
-const EditLinkForm: React.FC<EditLinkFormProps> = ({ link, onClose, onSave }) => {
-  const { categories, updateLink, addCategory, openModal, closeModal } = useAppContext();
+const EditLinkForm: React.FC<EditLinkFormProps> = ({ 
+  link, 
+  onClose, 
+  updateLinkMutate, 
+  isUpdatingLink 
+}) => {
+  const { categories, addCategory, openModal } = useAppContext();
   
   const [url, setUrl] = useState(link.url || '');
   const [title, setTitle] = useState(link.title || '');
@@ -76,8 +83,7 @@ const EditLinkForm: React.FC<EditLinkFormProps> = ({ link, onClose, onSave }) =>
 
     const type = shareService.getLinkType(url);
     
-    // Preserve the original id
-    const success = await updateLink({
+    updateLinkMutate({
       ...link,
       url: url.trim(),
       title: title.trim() || '',
@@ -86,15 +92,14 @@ const EditLinkForm: React.FC<EditLinkFormProps> = ({ link, onClose, onSave }) =>
       favicon,
       category_id: parseInt(categoryId, 10),
       type
-    });
-
-    if (success) {
-      if (onSave) {
-        onSave();
+    }, {
+      onSuccess: () => {
+        onClose();
+      },
+      onError: (error) => {
+        console.error("Error updating link from form:", error);
       }
-      closeModal();
-      onClose();
-    }
+    });
   };
 
   const handleAddCategory = async () => {
@@ -263,8 +268,13 @@ const EditLinkForm: React.FC<EditLinkFormProps> = ({ link, onClose, onSave }) =>
           <Button type="button" variant="outline" onClick={onClose} className="flex-1 bg-white/10 text-white border-white/20 hover:bg-white/20">
             Cancel
           </Button>
-          <Button type="submit" className="flex-1 bg-linkstash-orange text-white hover:bg-linkstash-orange/80">
-            Save Changes
+          <Button 
+            type="submit" 
+            className="flex-1 bg-linkstash-orange text-white hover:bg-linkstash-orange/80"
+            disabled={isUpdatingLink || isLoading}
+          >
+            {(isUpdatingLink || isLoading) && <Loader2 className="h-4 w-4 animate-spin mr-2" />} 
+            {isUpdatingLink ? 'Saving...' : isLoading ? 'Loading Meta...' : 'Save Changes'}
           </Button>
         </div>
       </form>
