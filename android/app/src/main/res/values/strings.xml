@@ -4,4 +4,5 @@
     <string name="title_activity_main">LinkStash Pocket</string>
     <string name="package_name">app.dunnewebsolutions.linkstash</string>
     <string name="custom_url_scheme">linkstash</string>
+    <string name="auth_callback_url_scheme">linkstash</string>
 </resources>

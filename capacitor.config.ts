@@ -32,6 +32,17 @@ const config: CapacitorConfig = {
       electronWindowsLocation: "C:\\ProgramData\\CapacitorDatabase",
       electronMacLocation: "/Volumes/Development_Lacie/Development/Databases",
       electronLinuxLocation: "Databases"
+    },
+    // Add App configuration to handle URL schemes
+    App: {
+      appUrlOpen: {
+        android: {
+          enabled: true,
+        },
+        ios: {
+          enabled: true,
+        }
+      }
     }
   }
 };

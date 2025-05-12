@@ -15,7 +15,10 @@ import Profile from "./pages/Profile";
 import InitialSetup from "./components/InitialSetup";
 import ShareHandler from "./components/ShareHandler";
 import BackButtonHandler from "./components/BackButtonHandler";
+import AuthRedirectHandler from "./components/AuthRedirectHandler";
 import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor, PluginListenerHandle } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
 
 const queryClient = new QueryClient();
@@ -88,41 +91,117 @@ const AppRoutes = () => {
       <Toaster />
       <SonnerToaster />
       <ShareHandler />
+      <AuthRedirectHandler />
     </BackButtonHandler>
   );
 };
 
 const App = () => {
   useEffect(() => {
-    CapacitorApp.addListener('appUrlOpen', ({ url }) => {
-        // Parse the URL fragment
-        const hash = url.split('#')[1]; 
-        if (!hash) {
-            console.error("No URL fragment found for session", url);
-            return;
-        }
-        
-        const params = new URLSearchParams(hash);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
+    let listenerCleanup: PluginListenerHandle | null = null;
 
-        if (accessToken && refreshToken) {
-            supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-            }).then(({ error }) => {
-                if (error) {
-                    console.error("Error setting session from URL:", error);
-                } else {
-                    console.log('📱 Deep-link login successful, session set.');
-                    // AuthProvider listener should pick up the new session
+    const setupListener = async () => {
+      // Add the listener and save the handle
+      listenerCleanup = await CapacitorApp.addListener('appUrlOpen', handleAppUrlOpen);
+    };
+
+    const handleAppUrlOpen = async ({ url }: { url: string }) => {
+      console.log('[App.tsx] App URL opened:', url);
+      
+      // Handle login callback URLs for OAuth
+      if (url.includes('login-callback')) {
+        try {
+          // Try to close browser if it's still open
+          try {
+            await Browser.close();
+          } catch (e) {
+            console.warn('[App.tsx] Browser closing error:', e);
+          }
+          
+          // Parse tokens directly from the URL
+          const extractTokens = (url: string) => {
+            console.log('[App.tsx] Extracting tokens from URL');
+            
+            try {
+              // Try hash fragment first
+              if (url.includes('#')) {
+                const hashPart = url.split('#')[1];
+                if (hashPart) {
+                  const params = new URLSearchParams(hashPart);
+                  const accessToken = params.get('access_token');
+                  const refreshToken = params.get('refresh_token');
+                  
+                  if (accessToken && refreshToken) {
+                    return { accessToken, refreshToken };
+                  }
                 }
+              }
+              
+              // Then try query params
+              if (url.includes('?')) {
+                const queryPart = url.split('?')[1];
+                if (queryPart) {
+                  const params = new URLSearchParams(queryPart);
+                  const accessToken = params.get('access_token');
+                  const refreshToken = params.get('refresh_token');
+                  
+                  if (accessToken && refreshToken) {
+                    return { accessToken, refreshToken };
+                  }
+                }
+              }
+              
+              // Try raw URL too (some redirects might have weirdly formatted tokens)
+              const rawParams = new URLSearchParams(url);
+              const accessToken = rawParams.get('access_token');
+              const refreshToken = rawParams.get('refresh_token');
+              
+              if (accessToken && refreshToken) {
+                return { accessToken, refreshToken };
+              }
+            } catch (e) {
+              console.error('[App.tsx] Error extracting tokens:', e);
+            }
+            
+            return null;
+          };
+          
+          const tokens = extractTokens(url);
+          
+          if (tokens) {
+            console.log('[App.tsx] Setting session with extracted tokens');
+            const { error } = await supabase.auth.setSession({
+              access_token: tokens.accessToken,
+              refresh_token: tokens.refreshToken,
             });
-        } else {
-            console.error("Tokens not found in URL fragment:", url);
+            
+            if (error) {
+              console.error('[App.tsx] Error setting session:', error);
+            } else {
+              console.log('[App.tsx] Deep-link login successful, session set');
+            }
+          } else {
+            console.error('[App.tsx] Could not extract tokens from URL:', url);
+          }
+        } catch (error) {
+          console.error('[App.tsx] Error handling login callback:', error);
         }
-    });
-  }, []);    
+      }
+      // Handle other deep link types
+      else if (url.includes('linkstash://')) {
+        console.log('[App.tsx] Other deep link received:', url);
+      }
+    };
+    
+    setupListener();
+    
+    // Cleanup
+    return () => {
+      if (listenerCleanup) {
+        listenerCleanup.remove();
+      }
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
